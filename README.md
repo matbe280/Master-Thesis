@@ -1,6 +1,7 @@
 # Master-Thesis
-Code for Master thesis by Mattias Bengtsson 
-Lifestyle Politics in Sweden –
+Code for Master thesis by, Mattias Bengtsson 
+
+**Lifestyle Politics in Sweden** –
 Examining the Emergence of Lifestyle politics Amidst the
 Decline of Class Voting in Sweden
 
