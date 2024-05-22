@@ -11,7 +11,8 @@ In the "Imputation_2024_04_05_incomeandculturewar" you find the code used for Im
 
 "Clusteranalysis" contains the script used for all cluster analysis, and latex output for tables. 
 
-Extra files: 
+**Files for appendices**:
+
 "Lifestylevariables" contains a script I used to simply make a table over the used variables. 
 
 "Multinomial logit modell" contains a script i used for testing the outcome of using a multinomial logit model. 
