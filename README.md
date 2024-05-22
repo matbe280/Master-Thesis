@@ -1,5 +1,8 @@
 # Master-Thesis
-Code for Master thesis
+Code for Master thesis by Mattias Bengtsson 
+Lifestyle Politics in Sweden –
+Examining the Emergence of Lifestyle politics Amidst the
+Decline of Class Voting in Sweden
 
 This repository contains code for Mattias Bengtssons's Master Thesis, Spring 2024. 
 
