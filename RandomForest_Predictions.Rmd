@@ -18,6 +18,8 @@ library(ggplot2)
 library(tidyverse)
 library(randomForest)
 library(modelsummary)
+library(performanceEstimation)
+
 ```
 
 
@@ -69,10 +71,6 @@ data <- data %>%
 data$socialist <- as.factor(data$socialist)
 
 class(data$socialist)
-```
-
-```{r}
-library(performanceEstimation)
 ```
 
 
