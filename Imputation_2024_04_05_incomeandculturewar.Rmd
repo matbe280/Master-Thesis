@@ -1,0 +1,361 @@
+---
+title: "Imputation_0405"
+author: "Mattias Bengtsson"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(nnet)
+library(missForest)
+library(randomForest)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+```
+
+```{r}
+# Setting working directory
+setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM")
+```
+
+```{r}
+#Reading data
+data <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Super-R-SOM (1986-2021).csv", header = TRUE, quote = "") 
+```
+
+
+
+```{r}
+#Cleaning column names
+colnames(data) <- gsub("^X|\\.*$", "", colnames(data)) 
+colnames(data) <- gsub("\\.", "", colnames(data))
+```
+```{r}
+#Removing columns without data
+data <- data[, colSums(!is.na(data)) > 0] 
+
+```
+
+```{r}
+#Choosing years 2001 to 2021
+data20012021 <- data |> 
+  filter(year >= 2001 & year <= 2021) 
+```
+
+
+```{r}
+#Removing columns without any data
+data20012021 <- data20012021[, colSums(!is.na(data20012021)) > 0] 
+```
+
+
+
+```{r}
+#Choosing variables to be included. Here i chose more variables than i was going to use in the analysis. This ensure a better imputation process, but also since i at this stage was unsure of which variables to include. 
+
+data_selected <- data20012021 |> select(idnr, year, lmsit, cityrur, citizen, subclh, subclg, lan, edu3, occgr, euroesec, hinc5rel, age, sex, natgeo, mc10c, mc10k, md10, mb99b, mb99a, mb99d, mb99e, ma50c, ma70b, ma40h, ma40c,  ma40b,  ma30c, ma30l, lb10a, lb10b, ma10a, lc10a, lc20a, la10, jc10a, jb19, genzukin, growupf, growupm, growupp, eg10, edu2, cb10, cb20, bc10, bc20, ba10, lb10d, lb10e, ld10a,lc10a,lc20a, le10c, le10d, unionm, ga10g, ga10j, ga10q, ha10, ha200d, fc900b, jf10a, jh10e)
+```
+
+
+
+```{r}
+
+
+# Convert all columns to numeric in order to remove the missing values that have values rather than "NA". 
+
+data_selected <- data_selected %>%
+  mutate(across(everything(), as.numeric))
+
+# Define values to be replaced with NA
+replacement_values <- c(95, 96, 97, 98, 99, 30, 998, 999, 9999)
+
+# Replacing replacement_values with NA in all columns except for the specified ones
+data_selected <- data_selected %>%
+  mutate(across(-c(idnr, natgeo, age, year), ~ifelse(. %in% replacement_values, NA, .)))
+
+
+```
+
+```{r}
+# Here i mutate all variables back to be as factor, except for year, age and idnr which are numeric. 
+data_selected <- mutate_at(data_selected, 
+                           vars(-year, -age, -idnr), 
+                           as.factor)
+```
+
+```{r}
+# Merging two variables measuring the same activity, "Exercised". 
+data_selected <- data |> 
+  mutate(merged_ma30 = coalesce(ma30c, ma30l))
+```
+
+```{r}
+# I have chosen to impute for each year separately, thus i create separate datasets for each year. 
+data_selected2001 <- data_selected |> 
+  filter(year == 2001)
+
+
+data_selected2002 <- data_selected |> 
+  filter(year == 2002)
+
+
+data_selected2003 <- data_selected |> 
+  filter(year == 2003)
+
+
+data_selected2004 <- data_selected |> 
+  filter(year == 2004)
+
+
+data_selected2005 <- data_selected |> 
+  filter(year == 2005)
+
+data_selected2006 <- data_selected |> 
+  filter(year == 2006)
+
+
+data_selected2007 <- data_selected |> 
+  filter(year == 2007)
+
+
+data_selected2008 <- data_selected |> 
+  filter(year == 2008)
+
+data_selected2009 <- data_selected |> 
+  filter(year == 2009)
+
+data_selected2010 <- data_selected |> 
+  filter(year == 2010)
+
+data_selected2011 <- data_selected |> 
+  filter(year == 2011)
+
+data_selected2012 <- data_selected |> 
+  filter(year == 2012)
+
+data_selected2013 <- data_selected |> 
+  filter(year == 2013)
+
+data_selected2014 <- data_selected |> 
+  filter(year == 2014)
+
+data_selected2015 <- data_selected |> 
+  filter(year == 2015)
+
+data_selected2016 <- data_selected |> 
+  filter(year == 2016)
+
+data_selected2017 <- data_selected |> 
+  filter(year == 2017)
+
+data_selected2018 <- data_selected |> 
+  filter(year == 2018)
+
+data_selected2019 <- data_selected |> 
+  filter(year == 2019)
+
+data_selected2020 <- data_selected |> 
+  filter(year == 2020)
+data_selected2021 <- data_selected |> 
+  filter(year == 2021)
+```
+
+Down below i use the missforest to impute. The same procedure is done for each year. I chose to not do it in a loop since it takes a long time for the imputation process and each year. Thus doing it in separate chunks was more managable for my computer. 
+
+The first line "imputed_yearx <- missForest(data_selectedyearx, verbose = TRUE)",applies the missForest algorithm on the dataset "data_selectedyearx". "Verbose" tells it to provide a detailed logging of the process. This enables me to make sure it is working since each imputation takes a long time. The second line extract the imputed dataframe from the result of the missForest function and assign it to imputed_dataframeyearX. 
+
+```{r}
+#For 2001
+imputed_2001 <- missForest(data_selected2001, verbose = TRUE)
+imputed_dataframe2001 <- imputed_2001$ximp
+```
+
+
+```{r}
+# For 2002
+imputed_2002 <- missForest(data_selected2002, verbose = TRUE)
+imputed_dataframe2002 <- imputed_2002$ximp
+```
+
+
+```{r}
+# For 2003
+imputed_2003 <- missForest(data_selected2003, verbose = TRUE)
+imputed_dataframe2003 <- imputed_2003$ximp
+```
+
+
+```{r}
+# For 2004
+imputed_2004 <- missForest(data_selected2004, verbose = TRUE)
+imputed_dataframe2004 <- imputed_2004$ximp
+```
+
+
+```{r}
+# For 2005
+imputed_2005 <- missForest(data_selected2005, verbose = TRUE)
+imputed_dataframe2005 <- imputed_2005$ximp
+```
+
+
+```{r}
+#For 2006
+imputed_2006 <- missForest(data_selected2006, verbose = TRUE)
+imputed_dataframe2006 <- imputed_2006$ximp
+```
+
+
+```{r}
+# For 2007
+imputed_2007 <- missForest(data_selected2007, verbose = TRUE)
+imputed_dataframe2007 <- imputed_2007$ximp
+```
+
+
+```{r}
+# For 2008
+imputed_2008 <- missForest(data_selected2008, verbose = TRUE)
+imputed_dataframe2008 <- imputed_2008$ximp
+```
+
+
+```{r}
+#For 2009
+
+imputed_2009 <- missForest(data_selected2009, verbose = TRUE)
+imputed_dataframe2009 <- imputed_2009$ximp
+```
+
+
+```{r}
+# For 2010
+imputed_2010 <- missForest(data_selected2010, verbose = TRUE)
+imputed_dataframe2010 <- imputed_2010$ximp
+```
+
+
+```{r}
+# For 2011
+imputed_2011 <- missForest(data_selected2011, verbose = TRUE)
+imputed_dataframe2011 <- imputed_2011$ximp
+
+
+```
+
+
+```{r}
+# For 2012
+imputed_2012 <- missForest(data_selected2012, verbose = TRUE)
+imputed_dataframe2012 <- imputed_2012$ximp
+```
+
+
+```{r}
+# For 2013
+
+imputed_2013 <- missForest(data_selected2013, verbose = TRUE)
+imputed_dataframe2013 <- imputed_2013$ximp
+
+
+```
+
+
+```{r}
+# For 2014
+imputed_2014 <- missForest(data_selected2014, verbose = TRUE)
+imputed_dataframe2014 <- imputed_2014$ximp
+```
+
+
+```{r}
+# For 2015
+
+imputed_2015 <- missForest(data_selected2015, verbose = TRUE)
+imputed_dataframe2015 <- imputed_2015$ximp
+```
+
+
+```{r}
+# For 2016
+
+imputed_2016 <- missForest(data_selected2016, verbose = TRUE)
+imputed_dataframe2016 <- imputed_2016$ximp
+```
+
+
+```{r}
+# For 2017
+
+imputed_2017 <- missForest(data_selected2017, verbose = TRUE)
+imputed_dataframe2017 <- imputed_2017$ximp
+```
+
+
+```{r}
+# For 2018
+
+imputed_2018 <- missForest(data_selected2018, verbose = TRUE)
+imputed_dataframe2018 <- imputed_2018$ximp
+```
+
+
+```{r}
+# For 2019
+imputed_2019 <- missForest(data_selected2019, verbose = TRUE)
+imputed_dataframe2019 <- imputed_2019$ximp
+```
+
+
+```{r}
+# For 2020
+
+imputed_2020 <- missForest(data_selected2020, verbose = TRUE)
+imputed_dataframe2020 <- imputed_2020$ximp
+```
+
+
+```{r}
+# For 2021
+imputed_2021 <- missForest(data_selected2021, verbose = TRUE)
+imputed_dataframe2021 <- imputed_2021$ximp
+
+```
+
+```{r}
+# Here i Save all of the imputed datasets into a list
+imputed_data_list2001_2021 <- list(
+  imputed_dataframe2001,
+  imputed_dataframe2002,
+  imputed_dataframe2003,
+  imputed_dataframe2004,
+  imputed_dataframe2005,
+  imputed_dataframe2006,
+  imputed_dataframe2007,
+  imputed_dataframe2008,
+  imputed_dataframe2009,
+  imputed_dataframe2010,
+  imputed_dataframe2011,
+  imputed_dataframe2012,
+  imputed_dataframe2013,
+  imputed_dataframe2014,
+  imputed_dataframe2015,
+  imputed_dataframe2016,
+  imputed_dataframe2017,
+  imputed_dataframe2018,
+  imputed_dataframe2019,
+  imputed_dataframe2020,
+  imputed_dataframe2021
+)
+# Then i combining each dataframe from the list to one
+combined_data01_21_incomeandcult <- bind_rows(imputed_data_list2001_2021)
+
+# Saving the dataframe to CSV. This is then the dataset i work with for every analysis
+write.csv(combined_data01_21_incomeandcult, file = "combined_imputed_data0121_incomeandcult.csv")
+```

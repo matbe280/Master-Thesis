@@ -1,0 +1,2200 @@
+---
+title: "Cluster analysis"
+author: "Mattias Bengtsson"
+date: "2024-04-25"
+output:
+  pdf_document:
+    toc: no
+  bookdown::pdf_document2:
+    toc: no
+    fig_cap: yes
+    keep_tex: yes
+    fontsize: 12pt
+    bibliography: ref.bib
+    csl: "https://www.zotero.org/styles/chicago-fullnote-bibliography"
+    suppress-bibliography: yes
+  word_document:
+    toc: no
+header-includes:
+- \usepackage{float}
+- \floatplacement{table}{H}
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+```
+
+
+# Setup
+
+```{r}
+
+library(tidyverse)
+library(FactoMineR)
+library(factoextra)
+library(explor)
+library(performanceEstimation)
+library(nnet)
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(modelsummary)
+library(kableExtra)
+library(flextable)
+library(cluster)
+library(tinytable)
+```
+
+
+```{r}
+ setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis")#liu dator
+```
+```{r}
+#setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis") 
+```
+
+
+```{r}
+imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
+
+#imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
+
+
+
+```
+
+
+```{r}
+data <- mutate_at(imputed_data_0121,
+                           vars(-year, -age, -idnr), 
+                           as.factor)
+```
+I will now check the amount of levels available for the different years in CB10 (favorite party).
+
+
+```{r}
+# Assuming 'data' is your dataframe containing the variable 'cb10'
+
+# Filter the data to exclude levels 11 and 12 from the variable 'cb10'
+data <- data %>% 
+  filter(cb10 != "11" & cb10 != "12")
+
+# Update the levels of the factor variable 'cb10' to reflect the dropped levels
+data$cb10 <- droplevels(data$cb10)
+
+nlevels(data$cb10)
+```
+
+
+```{r}
+data <- data |> 
+  mutate(p1 = case_when(
+    jc10a == "1" ~ "6",
+    jc10a == "2" ~ "5",
+    jc10a == "3" ~ "4",
+    jc10a == "4"~ "3",
+    jc10a == "5" ~ "2",
+    jc10a == "6" ~ "1"
+  ))
+
+data <- data |> 
+  mutate(euroesec_2 = case_when(
+    euroesec == "1" ~ "9",
+    euroesec == "2" ~ "8",
+    euroesec == "3" ~ "7",
+    euroesec == "4"~ "6",
+    euroesec == "5" ~ "5",
+    euroesec == "6" ~ "4",
+    euroesec == "7" ~ "3",
+    euroesec == "8" ~ "2",
+    euroesec == "9" ~ "1"
+  ))
+
+data <- data %>% 
+  mutate(sex_binary = case_when(
+    sex == "1" ~ 0,
+    sex == "2" ~ 1
+  ))
+
+data <- data %>%  
+  mutate(praying = bc20,
+         Cinema = la10,
+         Rock_pop = lb10b,
+         Theatre = lb10a,
+         Classical_opera = lb10e,
+         Library = eg10,
+         Pub_restaurant = ma50c,
+         Drawn_painted = le10c,
+         Friends = ma10a,
+         Church = bc10,
+         snus = ma40h,
+         gamble_lottery = mc10c,
+         Generations = genzukin,
+         Subjective_class_today = subclg, 
+         Income = hinc5rel,
+         Educationlevel = edu3
+         )
+```
+
+# Clustering 2019
+
+```{r}
+Clusteringdata_2019 <- data %>% 
+    filter(year == 2019) %>% 
+  select(idnr,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1#,
+        # euroesec_2,
+         #Income,
+         #Educationlevel,
+         #Subjective_class_today,
+         #Generations)
+)
+
+row.names(Clusteringdata_2019) <- Clusteringdata_2019$idnr
+
+Clusteringdata_2019 <- Clusteringdata_2019 %>% 
+  select(-idnr)
+```
+
+```{r}
+?dist
+dist_matrix_2019 <- dist(Clusteringdata_2019)
+
+```
+
+```{r}
+# Perform hierarchical clustering
+set.seed(123)
+cluster_result_2019 <- hclust(dist_matrix_2019, method = "ward.D2")
+
+# Visualize dendrogram
+dendogram2019 <- plot(cluster_result_2019, main = "Hierarchical Clustering Dendrogram 2019",
+     xlab = "Observations", sub = NULL)
+abline(h = 160, col = "red", lty = "dashed")
+```
+```{r}
+png("Dendogram2019.png", width = 2000, height = 1400, res = 300)
+plot(cluster_result_2019, main = "Hierarchical Clustering Dendrogram 2019",
+     xlab = "Observations", sub = NULL)
+abline(h = 160, col = "red", lty = "dashed")
+dev.off()
+```
+
+```{r}
+?hclust
+```
+
+```{r}
+# Cut dendrogram into 4 clusters
+clusters_2019_k4 <- cutree(cluster_result_2019, k = 4)
+
+clusters_2019_k4 <- as.data.frame(clusters_2019_k4)
+
+clusters_2019_k4$idnr <- row.names(clusters_2019_k4)
+
+row.names(clusters_2019_k4) <- NULL
+```
+
+```{r}
+data2019 <- data %>% 
+  filter(year == 2019)
+```
+
+```{r}
+data2019 <- merge(data2019, clusters_2019_k4, by = "idnr")
+```
+
+
+```{r}
+# Cut dendrogram into 2 clusters
+clusters_2019_k2 <- cutree(cluster_result_2019, k = 2)
+
+
+clusters_2019_k2 <- as.data.frame(clusters_2019_k2)
+
+clusters_2019_k2$idnr <- row.names(clusters_2019_k2)
+
+row.names(clusters_2019_k2) <- NULL
+```
+
+```{r}
+# Cut dendrogram into 6 clusters
+clusters_2019_k6 <- cutree(cluster_result_2019, k = 6)
+
+
+clusters_2019_k6 <- as.data.frame(clusters_2019_k6)
+
+clusters_2019_k6$idnr <- row.names(clusters_2019_k6)
+
+row.names(clusters_2019_k6) <- NULL
+```
+
+```{r}
+# Cut dendrogram into 6 clusters
+clusters_2019_k7 <- cutree(cluster_result_2019, k = 7)
+
+
+clusters_2019_k7 <- as.data.frame(clusters_2019_k7)
+
+clusters_2019_k7$idnr <- row.names(clusters_2019_k7)
+
+row.names(clusters_2019_k7) <- NULL
+```
+
+
+```{r}
+# Cut dendrogram into 8 clusters
+clusters_2019_k8 <- cutree(cluster_result_2019, k = 8)
+
+
+clusters_2019_k8 <- as.data.frame(clusters_2019_k8)
+
+clusters_2019_k8$idnr <- row.names(clusters_2019_k8)
+
+row.names(clusters_2019_k8) <- NULL
+```
+
+
+#### Silhoette score
+
+```{r}
+#K = 4
+silhouette_score_2019_k4 <- silhouette(clusters_2019_k4[,1], dist_matrix_2019)
+
+# Print silhouette scores
+mean(silhouette_score_2019_k4[,3])
+
+```
+
+```{r}
+#K = 2 
+silhouette_score_2019_k2 <- silhouette(clusters_2019_k2[,1], dist_matrix_2019)
+
+# Print silhouette scores
+mean(silhouette_score_2019_k2[,3])
+
+```
+```{r}
+#K = 6
+silhouette_score_2019_k6 <- silhouette(clusters_2019_k6[,1], dist_matrix_2019)
+
+# Print silhouette scores
+mean(silhouette_score_2019_k6[,3])
+
+```
+```{r}
+#K = 7
+silhouette_score_2019_k7 <- silhouette(clusters_2019_k7[,1], dist_matrix_2019)
+
+# Print silhouette scores
+mean(silhouette_score_2019_k7[,3])
+
+```
+
+
+```{r}
+#K = 8
+silhouette_score_2019_k8 <- silhouette(clusters_2019_k8[,1], dist_matrix_2019)
+
+# Print silhouette scores
+mean(silhouette_score_2019_k8[,3])
+
+```
+
+
+#### Chi square test 2019
+
+```{r}
+chisq_result_2019 <- chisq.test(data2019$cb10, data2019$clusters_2019_k4)
+
+# Print the test result
+print(chisq_result_2019)
+```
+# Clustering  2014
+
+
+```{r}
+Clusteringdata_2014 <- data %>% 
+    filter(year == 2014) %>% 
+  select(idnr,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1#,
+        # euroesec_2,
+         #Income,
+         #Educationlevel,
+         #Subjective_class_today,
+         #Generations)
+)
+
+row.names(Clusteringdata_2014) <- Clusteringdata_2014$idnr
+
+Clusteringdata_2014 <- Clusteringdata_2014 %>% 
+  select(-idnr)
+```
+
+```{r}
+dist_matrix_2014 <- dist(Clusteringdata_2014)
+
+```
+
+```{r}
+# Perform hierarchical clustering
+set.seed(123)
+
+cluster_result_2014 <- hclust(dist_matrix_2014, method = "ward.D2")
+
+# Visualize dendrogram
+dendogram2014 <- plot(cluster_result_2014, main = "Hierarchical Clustering Dendrogram 2014",
+     xlab = "Observations", sub = NULL)
+abline(h = 125, col = "red", lty = "dashed")
+```
+```{r}
+png("Dendogram2014.png", width = 2000, height = 1400, res = 300)
+plot(cluster_result_2014, main = "Hierarchical Clustering Dendrogram 2014",
+     xlab = "Observations", sub = NULL)
+abline(h = 125, col = "red", lty = "dashed")
+dev.off()
+```
+
+```{r}
+# Cut dendrogram into 2 clusters
+clusters_2014 <- cutree(cluster_result_2014, k = 4)
+print(clusters_2014)
+
+clusters_2014 <- as.data.frame(clusters_2014)
+
+clusters_2014$idnr <- row.names(clusters_2014)
+
+row.names(clusters_2014) <- NULL
+```
+
+```{r}
+data2014 <- data %>% 
+  filter(year == 2014)
+```
+
+```{r}
+data2014 <- merge(data2014, clusters_2014, by = "idnr")
+```
+
+#### Chi square test 2014
+
+```{r}
+chisq_result_2014 <- chisq.test(data2014$cb10, data2014$clusters_2014)
+
+# Print the test result
+print(chisq_result_2014)
+```
+```{r}
+print(chisq_result_2019)
+```
+
+# Clustering 2008
+
+
+
+
+```{r}
+Clusteringdata_2008 <- data %>% 
+    filter(year == 2008) %>% 
+  select(idnr,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1#,
+        # euroesec_2,
+         #Income,
+         #Educationlevel,
+         #Subjective_class_today,
+         #Generations)
+)
+
+row.names(Clusteringdata_2008) <- Clusteringdata_2008$idnr
+
+Clusteringdata_2008 <- Clusteringdata_2008 %>% 
+  select(-idnr)
+```
+
+```{r}
+dist_matrix_2008 <- dist(Clusteringdata_2008)
+
+```
+
+```{r}
+# Perform hierarchical clustering
+set.seed(123)
+
+cluster_result_2008 <- hclust(dist_matrix_2008, method = "ward.D2")
+
+# Visualize dendrogram
+dendogram2008 <- plot(cluster_result_2008, main = "Hierarchical Clustering Dendrogram 2008",
+     xlab = "Observations", sub = NULL)
+abline(h = 103, col = "red", lty = "dashed")
+```
+```{r}
+png("Dendogram2008.png", width = 2000, height = 1400, res = 300)
+plot(cluster_result_2008, main = "Hierarchical Clustering Dendrogram 2008",
+     xlab = "Observations", sub = NULL)
+abline(h = 103, col = "red", lty = "dashed")
+dev.off()
+```
+
+
+```{r}
+# Cut dendrogram into clusters
+clusters_2008 <- cutree(cluster_result_2008, k = 4)
+print(clusters_2008)
+
+clusters_2008 <- as.data.frame(clusters_2008)
+
+clusters_2008$idnr <- row.names(clusters_2008)
+
+row.names(clusters_2008) <- NULL
+```
+
+```{r}
+data2008 <- data %>% 
+  filter(year == 2008)
+```
+
+```{r}
+data2008 <- merge(data2008, clusters_2008, by = "idnr")
+```
+
+
+#### Chi square test 2008
+
+
+```{r}
+chisq_result_2008 <- chisq.test(data2008$cb10, data2008$clusters_2008)
+
+# Print the test result
+print(chisq_result_2008)
+print(chisq_result_2014)
+print(chisq_result_2019)
+```
+# Descriptive statistics of clusters K = 4
+
+### 2008
+
+#### table of party proportion
+
+
+```{r}
+Clusteringdata_2008_cluster1 <- data2008 %>% 
+  filter(clusters_2008 == "1")
+
+Clusteringdata_2008_cluster2 <- data2008 %>% 
+  filter(clusters_2008 == "2")
+
+Clusteringdata_2008_cluster3 <- data2008 %>% 
+  filter(clusters_2008 == "3")
+
+Clusteringdata_2008_cluster4 <- data2008 %>% 
+  filter(clusters_2008 == "4")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1 <- prop.table(table(Clusteringdata_2008_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1 <- as.data.frame(category_proportionsc1)
+
+names(category_proportions_dfc1) <- c("Party", "Proportion_C1")
+
+# Plot the proportions using ggplot
+ggplot(category_proportions_dfc1, aes(x = Party, y = Proportion_C1)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Proportions of Categories from cb10 (Cluster 1)",
+       x = "Party",
+       y = "Proportion_C1") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2 <- prop.table(table(Clusteringdata_2008_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2 <- as.data.frame(category_proportionsc2)
+
+names(category_proportions_dfc2) <- c("Party", "Proportion_C2")
+
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3 <- prop.table(table(Clusteringdata_2008_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3 <- as.data.frame(category_proportionsc3)
+
+names(category_proportions_dfc3) <- c("Party", "Proportion_C3")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc4 <- prop.table(table(Clusteringdata_2008_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4 <- as.data.frame(category_proportionsc4)
+
+names(category_proportions_dfc4) <- c("Party", "Proportion_C4")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportions <- prop.table(table(data2008$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_df <- as.data.frame(category_proportions)
+
+names(category_proportions_df) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2008 <- merge(category_proportions_dfc1, category_proportions_dfc2, by = "Party")
+merged_2008 <- merge(merged_2008, category_proportions_dfc3, by = "Party")
+merged_2008 <- merge(merged_2008, category_proportions_dfc4, by = "Party")
+merged_2008 <- merge(merged_2008, category_proportions_df, by = "Party")
+```
+
+```{r}
+merged_2008 <- merged_2008 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2008 <- merged_2008 %>% 
+  rename("Cluster 1" = Proportion_C1,
+         "Cluster 2" = Proportion_C2,
+         "Cluster 3" = Proportion_C3,
+         "Cluster 4" = Proportion_C4,
+         "All" = Proportion_all)
+
+merged_2008 <- merged_2008 %>%
+  mutate_at(vars(starts_with("Cluster")), funs(. * 100))
+
+merged_2008 <- merged_2008 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+
+
+```{r}
+#Datasummary to create table
+datasummary_df(merged_2008, fmt = 0,
+               title = "Preferred party of respondents in each cluster, for 2008",
+               note = "Data from SOM",
+               output = "kableExtra")
+
+table_proportions_cluster_2008 <- datasummary_df(merged_2008, fmt = 0,
+               title = "Preferred party of respondents in each cluster, for 2008",
+               note = "Data from SOM",
+               output = "kableExtra",)
+```
+
+
+
+
+```{r echo=FALSE, include = TRUE}
+table_proportions_cluster_2008
+```
+
+
+#### Table of lifestyle and class descriptives
+
+```{r}
+data2008_tabledata <- data2008 %>% 
+  select(clusters_2008,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2008_tabledata <- as.data.frame(data2008_tabledata)
+
+
+data2008_tabledata_means <- data2008_tabledata %>%
+  mutate_all(as.numeric)
+
+data2008_tabledata_means <- data2008_tabledata_means %>%
+  mutate(clusters_2008 = as.character(clusters_2008))
+
+```
+
+```{r}
+# Table with descriptive statistics of the clusters. Here i use mean and SD. 
+
+
+
+datasummary(praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ clusters_2008 * (Mean + Percent()) + Mean + N,
+            data = data2008_tabledata_means, 
+         title = "2008")
+
+
+
+
+```
+
+
+
+
+### 2014
+#### Descriptives of party
+```{r}
+Clusteringdata_2014_cluster1 <- data2014 %>% 
+  filter(clusters_2014 == "1")
+
+Clusteringdata_2014_cluster2 <- data2014 %>% 
+  filter(clusters_2014 == "2")
+
+Clusteringdata_2014_cluster3 <- data2014 %>% 
+  filter(clusters_2014 == "3")
+
+Clusteringdata_2014_cluster4 <- data2014 %>% 
+  filter(clusters_2014 == "4")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1 <- prop.table(table(Clusteringdata_2014_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1 <- as.data.frame(category_proportionsc1)
+
+names(category_proportions_dfc1) <- c("Party", "Proportion_C1")
+
+# Plot the proportions using ggplot
+ggplot(category_proportions_dfc1, aes(x = Party, y = Proportion_C1)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Proportions of Categories from cb10 (Cluster 1)",
+       x = "Party",
+       y = "Proportion_C1") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2 <- prop.table(table(Clusteringdata_2014_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2 <- as.data.frame(category_proportionsc2)
+
+names(category_proportions_dfc2) <- c("Party", "Proportion_C2")
+
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3 <- prop.table(table(Clusteringdata_2014_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3 <- as.data.frame(category_proportionsc3)
+
+names(category_proportions_dfc3) <- c("Party", "Proportion_C3")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc4 <- prop.table(table(Clusteringdata_2014_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4 <- as.data.frame(category_proportionsc4)
+
+names(category_proportions_dfc4) <- c("Party", "Proportion_C4")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportions <- prop.table(table(data2014$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_df <- as.data.frame(category_proportions)
+
+names(category_proportions_df) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2014 <- merge(category_proportions_dfc1, category_proportions_dfc2, by = "Party")
+merged_2014 <- merge(merged_2014, category_proportions_dfc3, by = "Party")
+merged_2014 <- merge(merged_2014, category_proportions_dfc4, by = "Party")
+merged_2014 <- merge(merged_2014, category_proportions_df, by = "Party")
+```
+
+
+```{r}
+merged_2014 <- merged_2014 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2014 <- merged_2014 %>% 
+  rename("Cluster 1 " = Proportion_C1,
+         "Cluster 2 " = Proportion_C2,
+         "Cluster 3 " = Proportion_C3,
+         "Cluster 4 " = Proportion_C4,
+         "All " = Proportion_all)
+
+merged_2014 <- merged_2014 %>%
+  mutate_at(vars(starts_with("Cluster")), funs(. * 100))
+
+merged_2014 <- merged_2014 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+```{r}
+table_proportions_cluster_2014 <- datasummary_df(merged_2014, fmt = 0,
+               title = "Preferred party of respondents in each cluster, for 2014",
+               note = "Data from SOM",
+               output = "kableExtra",)
+
+table_proportions_cluster_2014
+```
+
+#### Descriptives of lifestyle and class variables
+
+```{r}
+
+data2014_tabledata <- data2014 %>% 
+  select(clusters_2014,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2014_tabledata <- as.data.frame(data2014_tabledata)
+
+
+data2014_tabledata_means <- data2014_tabledata %>%
+  mutate_all(as.numeric)
+
+data2014_tabledata_means <- data2014_tabledata_means %>%
+  mutate(clusters_2014 = as.character(clusters_2014))
+
+```
+
+
+#### table 
+```{r}
+# Table with descriptive statistics of the clusters. Here i use mean and sd. 
+
+datasummary(praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ clusters_2014 * (Mean + Percent()) + Mean + N,
+            data = data2014_tabledata_means,
+         title = "2014")
+
+
+
+```
+
+
+
+### 2019
+
+#### Party proportions
+```{r}
+Clusteringdata_2019_cluster1 <- data2019 %>% 
+  filter(clusters_2019_k4 == "1")
+
+Clusteringdata_2019_cluster2 <- data2019 %>% 
+  filter(clusters_2019_k4 == "2")
+
+Clusteringdata_2019_cluster3 <- data2019 %>% 
+  filter(clusters_2019_k4 == "3")
+
+Clusteringdata_2019_cluster4 <- data2019 %>% 
+  filter(clusters_2019_k4 == "4")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1 <- prop.table(table(Clusteringdata_2019_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1 <- as.data.frame(category_proportionsc1)
+
+names(category_proportions_dfc1) <- c("Party", "Proportion_C1")
+
+# Plot the proportions using ggplot
+ggplot(category_proportions_dfc1, aes(x = Party, y = Proportion_C1)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Proportions of Categories from cb10 (Cluster 1)",
+       x = "Party",
+       y = "Proportion_C1") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2 <- prop.table(table(Clusteringdata_2019_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2 <- as.data.frame(category_proportionsc2)
+
+names(category_proportions_dfc2) <- c("Party", "Proportion_C2")
+
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3 <- prop.table(table(Clusteringdata_2019_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3 <- as.data.frame(category_proportionsc3)
+
+names(category_proportions_dfc3) <- c("Party", "Proportion_C3")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 4
+category_proportionsc4 <- prop.table(table(Clusteringdata_2019_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4 <- as.data.frame(category_proportionsc4)
+
+names(category_proportions_dfc4) <- c("Party", "Proportion_C4")
+
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportions <- prop.table(table(data2019$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_df <- as.data.frame(category_proportions)
+
+names(category_proportions_df) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2019 <- merge(category_proportions_dfc1, category_proportions_dfc2, by = "Party")
+merged_2019 <- merge(merged_2019, category_proportions_dfc3, by = "Party")
+merged_2019 <- merge(merged_2019, category_proportions_dfc4, by = "Party")
+merged_2019 <- merge(merged_2019, category_proportions_df, by = "Party")
+
+```
+
+```{r}
+merged_2019 <- merged_2019 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2019 <- merged_2019 %>% 
+  rename("Cluster 1 " = Proportion_C1,
+         "Cluster 2 " = Proportion_C2,
+         "Cluster 3 " = Proportion_C3,
+         "Cluster 4 " = Proportion_C4,
+         "All " = Proportion_all)
+
+merged_2019 <- merged_2019 %>%
+  mutate_at(vars(starts_with("Cluster")), funs(. * 100))
+
+merged_2019 <- merged_2019 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+```{r}
+table_proportions_cluster_2019 <- datasummary_df(merged_2019, fmt = 0,
+               title = "Preferred party of respondents in each cluster, for 2019",
+               note = "Data from SOM",
+               output = "kableExtra",)
+```
+
+
+#### Descriptives of lifestyle and class variables
+
+```{r}
+
+data2019_tabledata <- data2019 %>% 
+  select(clusters_2019_k4,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2019_tabledata <- as.data.frame(data2019_tabledata)
+
+
+data2019_tabledata_means <- data2019_tabledata %>%
+  mutate_all(as.numeric)
+
+data2019_tabledata_means <- data2019_tabledata_means %>%
+  mutate(clusters_2019_k4 = as.character(clusters_2019_k4))
+
+```
+
+```{r}
+# Table with descriptive statistics of the clusters. Here i use mean and sd. 
+
+datasummary(praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ clusters_2019_k4 * (Mean + Percent()) + Mean + N,
+            data = data2019_tabledata_means,
+         title = "2019")
+
+
+
+```
+
+
+
+# Descriptive statistics of clusters K = 8
+
+
+## 2008
+
+
+```{r}
+# Cut dendrogram into 4 clusters
+clusters_2008_k8 <- cutree(cluster_result_2008, k = 8)
+
+clusters_2008_k8 <- as.data.frame(clusters_2008_k8)
+
+clusters_2008_k8$idnr <- row.names(clusters_2008_k8)
+
+row.names(clusters_2008_k8) <- NULL
+```
+
+```{r}
+data2008_k8 <- data %>% 
+  filter(year == 2008)
+```
+
+```{r}
+data2008_k8 <- merge(data2008_k8, clusters_2008_k8, by = "idnr")
+```
+
+
+#### Party proportions
+```{r}
+Clusteringdata_2008k8_cluster1 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "1")
+
+Clusteringdata_2008k8_cluster2 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "2")
+
+Clusteringdata_2008k8_cluster3 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "3")
+
+Clusteringdata_2008k8_cluster4 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "4")
+
+Clusteringdata_2008k8_cluster5 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "5")
+
+Clusteringdata_2008k8_cluster6 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "6")
+
+Clusteringdata_2008k8_cluster7 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "7")
+
+Clusteringdata_2008k8_cluster8 <- data2008_k8 %>% 
+  filter(clusters_2008_k8 == "8")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1_k8 <- prop.table(table(Clusteringdata_2008k8_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1_k8 <- as.data.frame(category_proportionsc1_k8)
+
+names(category_proportions_dfc1_k8) <- c("Party", "Proportion_C1")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2_k8 <- prop.table(table(Clusteringdata_2008k8_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2_k8 <- as.data.frame(category_proportionsc2_k8)
+
+names(category_proportions_dfc2_k8) <- c("Party", "Proportion_C2")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3_k8 <- prop.table(table(Clusteringdata_2008k8_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3_k8 <- as.data.frame(category_proportionsc3_k8)
+
+names(category_proportions_dfc3_k8) <- c("Party", "Proportion_C3")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 4
+category_proportionsc4_k8 <- prop.table(table(Clusteringdata_2008k8_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4_k8 <- as.data.frame(category_proportionsc4_k8)
+
+names(category_proportions_dfc4_k8) <- c("Party", "Proportion_C4")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 5
+category_proportionsc5_k8 <- prop.table(table(Clusteringdata_2008k8_cluster5$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc5_k8 <- as.data.frame(category_proportionsc5_k8)
+
+names(category_proportions_dfc5_k8) <- c("Party", "Proportion_C5")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc6_k8 <- prop.table(table(Clusteringdata_2008k8_cluster6$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc6_k8 <- as.data.frame(category_proportionsc6_k8)
+
+names(category_proportions_dfc6_k8) <- c("Party", "Proportion_C6")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc7_k8 <- prop.table(table(Clusteringdata_2008k8_cluster7$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc7_k8 <- as.data.frame(category_proportionsc7_k8)
+
+names(category_proportions_dfc7_k8) <- c("Party", "Proportion_C7")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc8_k8 <- prop.table(table(Clusteringdata_2008k8_cluster8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc8_k8 <- as.data.frame(category_proportionsc8_k8)
+
+names(category_proportions_dfc8_k8) <- c("Party", "Proportion_C8")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportionsk8 <- prop.table(table(data2008_k8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfk8 <- as.data.frame(category_proportionsk8)
+
+names(category_proportions_dfk8) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2008_k8 <- merge(category_proportions_dfc1_k8, category_proportions_dfc2_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc3_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc4_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc5_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc6_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc7_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfc8_k8, by = "Party")
+
+merged_2008_k8 <- merge(merged_2008_k8 , category_proportions_dfk8, by = "Party")
+
+```
+
+```{r}
+merged_2008_k8 <- merged_2008_k8 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2008_k8 <- merged_2008_k8 %>% 
+  rename("Cluster 1" = Proportion_C1,
+         "Cluster 2 " = Proportion_C2,
+          "Cluster 3" = Proportion_C3,
+            "Cluster 4" = Proportion_C4,
+         "Cluster 5" = Proportion_C5,
+         "Cluster 6" = Proportion_C6,
+         #Switched places to make the table more logical
+         "Cluster 7" = Proportion_C7,
+         "Cluster 8" = Proportion_C8,
+         "All" = Proportion_all)
+
+merged_2008_k8 <- merged_2008_k8 %>%
+  mutate_at(vars(starts_with("Cluster")), funs(. * 100))
+
+merged_2008_k8 <- merged_2008_k8 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+```{r}
+table_proportions_cluster_2008k8 <- datasummary_df(merged_2008_k8, fmt = 0,
+               title = "Preferred party of respondents in each cluster, for the year 2008",
+               note = "Data from SOM",
+               output = "latex")
+```
+
+
+```{r echo=FALSE, include = TRUE}
+table_proportions_cluster_2008k8
+```
+
+
+#### Descriptives of lifestyle and class variables
+
+```{r}
+
+data2008_tabledata_k8 <- data2008_k8 %>% 
+  select(clusters_2008_k8,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2008_tabledata_k8 <- as.data.frame(data2008_tabledata_k8)
+
+
+data2008_tabledata_means_k8 <- data2008_tabledata_k8 %>%
+  mutate_all(as.numeric)
+
+data2008_tabledata_means_k8 <- data2008_tabledata_means_k8 %>%
+  mutate(clusters_2008_k8 = as.character(clusters_2008_k8))
+
+
+data2008_tabledata_means_k8 <- data2008_tabledata_means_k8 %>% 
+  mutate(cluster = case_when(
+    clusters_2008_k8 == "1" ~ "C 1",
+    clusters_2008_k8 == "3" ~ "C 2",
+    clusters_2008_k8 == "2" ~ "C 3",
+    clusters_2008_k8 == "6" ~ "C 4",
+    clusters_2008_k8 == "5" ~ "C 5",
+    clusters_2008_k8 == "4" ~ "C 6",
+    clusters_2008_k8 == "3" ~ "C 2",
+    clusters_2008_k8 == "7" ~ "C 7",
+    clusters_2008_k8 == "8" ~ "C 8"))
+
+```
+
+```{r echo=FALSE, include = TRUE}
+# Table with descriptive statistics of the clusters. Here i use mean and sd. 
+
+datasummary(praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ cluster * (Mean) + Mean,
+            data = data2008_tabledata_means_k8,
+         title = "2008",
+         output = "latex")
+
+
+
+```
+### Descriptive table
+```{r}
+datasummary(
+         sex_binary ~ cluster * (Percent()) + N, #I use sex_binary as a placeholder to create a table. 
+            data = data2008_tabledata_means_k8,
+         title = "2008",
+         output = "latex")
+
+```
+
+## 2014
+
+
+```{r}
+# Cut dendrogram into 4 clusters
+clusters_2014_k8 <- cutree(cluster_result_2014, k = 8)
+
+clusters_2014_k8 <- as.data.frame(clusters_2014_k8)
+
+clusters_2014_k8$idnr <- row.names(clusters_2014_k8)
+
+row.names(clusters_2014_k8) <- NULL
+```
+
+```{r}
+data2014_k8 <- data %>% 
+  filter(year == 2014)
+```
+
+```{r}
+data2014_k8 <- merge(data2014_k8, clusters_2014_k8, by = "idnr")
+```
+
+
+#### Party proportions
+```{r}
+Clusteringdata_2014k8_cluster1 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "1")
+
+Clusteringdata_2014k8_cluster2 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "2")
+
+Clusteringdata_2014k8_cluster3 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "3")
+
+Clusteringdata_2014k8_cluster4 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "4")
+
+Clusteringdata_2014k8_cluster5 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "5")
+
+Clusteringdata_2014k8_cluster6 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "6")
+
+Clusteringdata_2014k8_cluster7 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "7")
+
+Clusteringdata_2014k8_cluster8 <- data2014_k8 %>% 
+  filter(clusters_2014_k8 == "8")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1_k8 <- prop.table(table(Clusteringdata_2014k8_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1_k8 <- as.data.frame(category_proportionsc1_k8)
+
+names(category_proportions_dfc1_k8) <- c("Party", "Proportion_C1")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2_k8 <- prop.table(table(Clusteringdata_2014k8_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2_k8 <- as.data.frame(category_proportionsc2_k8)
+
+names(category_proportions_dfc2_k8) <- c("Party", "Proportion_C2")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3_k8 <- prop.table(table(Clusteringdata_2014k8_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3_k8 <- as.data.frame(category_proportionsc3_k8)
+
+names(category_proportions_dfc3_k8) <- c("Party", "Proportion_C3")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 4
+category_proportionsc4_k8 <- prop.table(table(Clusteringdata_2014k8_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4_k8 <- as.data.frame(category_proportionsc4_k8)
+
+names(category_proportions_dfc4_k8) <- c("Party", "Proportion_C4")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 5
+category_proportionsc5_k8 <- prop.table(table(Clusteringdata_2014k8_cluster5$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc5_k8 <- as.data.frame(category_proportionsc5_k8)
+
+names(category_proportions_dfc5_k8) <- c("Party", "Proportion_C5")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc6_k8 <- prop.table(table(Clusteringdata_2014k8_cluster6$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc6_k8 <- as.data.frame(category_proportionsc6_k8)
+
+names(category_proportions_dfc6_k8) <- c("Party", "Proportion_C6")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc7_k8 <- prop.table(table(Clusteringdata_2014k8_cluster7$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc7_k8 <- as.data.frame(category_proportionsc7_k8)
+
+names(category_proportions_dfc7_k8) <- c("Party", "Proportion_C7")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc8_k8 <- prop.table(table(Clusteringdata_2014k8_cluster8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc8_k8 <- as.data.frame(category_proportionsc8_k8)
+
+names(category_proportions_dfc8_k8) <- c("Party", "Proportion_C8")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportionsk8 <- prop.table(table(data2014_k8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfk8 <- as.data.frame(category_proportionsk8)
+
+names(category_proportions_dfk8) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2014_k8 <- merge(category_proportions_dfc1_k8, category_proportions_dfc2_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc3_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc4_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc5_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc6_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc7_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfc8_k8, by = "Party")
+
+merged_2014_k8 <- merge(merged_2014_k8 , category_proportions_dfk8, by = "Party")
+
+```
+
+```{r}
+merged_2014_k8 <- merged_2014_k8 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2014_k8 <- merged_2014_k8 %>% 
+  rename("C 1 " = Proportion_C1,
+         "C 2 " = Proportion_C2,
+         "C 3 " = Proportion_C3,
+         "C 4 " = Proportion_C4,
+         "C 5 " = Proportion_C5,
+         "C 6 " = Proportion_C6,
+         "C 7 " = Proportion_C7,
+         "C 8 " = Proportion_C8,
+         "All " = Proportion_all)
+
+merged_2014_k8 <- merged_2014_k8 %>%
+  mutate_at(vars(starts_with("C")), funs(. * 100))
+
+merged_2014_k8 <- merged_2014_k8 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+
+```{r}
+table_proportions_cluster_2014k8 <- datasummary_df(merged_2014_k8, fmt = 0,
+               title = "Preferred party of respondents in each cluster, k=8, for 2014",
+               note = "Data from SOM",
+               output = "latex")
+```
+
+
+```{r echo=FALSE, include = TRUE}
+table_proportions_cluster_2014k8
+```
+
+
+#### Descriptives of lifestyle and class variables
+
+```{r}
+
+data2014_tabledata_k8 <- data2014_k8 %>% 
+  select(clusters_2014_k8,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2014_tabledata_k8 <- as.data.frame(data2014_tabledata_k8)
+
+
+data2014_tabledata_means_k8 <- data2014_tabledata_k8 %>%
+  mutate_all(as.numeric)
+
+data2014_tabledata_means_k8 <- data2014_tabledata_means_k8 %>%
+  mutate(clusters_2014_k8 = as.character(clusters_2014_k8))
+
+```
+
+```{r echo=FALSE, include = TRUE}
+# Table with descriptive statistics of the clusters. Here i use mean and sd. 
+
+datasummary(praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ clusters_2014_k8 * (Mean) + Mean,
+            data = data2014_tabledata_means_k8,
+         title = "2014",
+         output = "latex")
+
+
+
+```
+#### Descriptive table
+
+```{r}
+datasummary(
+         sex_binary ~ clusters_2014_k8 * (Percent()) + N, #I use sex_binary as a placeholder to create a table. 
+            data = data2014_tabledata_means_k8,
+         title = "2014",
+         output = "latex")
+
+```
+
+
+## 2019
+
+
+```{r}
+# Cut dendrogram into 4 clusters
+clusters_2019_k8 <- cutree(cluster_result_2019, k = 8)
+
+clusters_2019_k8 <- as.data.frame(clusters_2019_k8)
+
+clusters_2019_k8$idnr <- row.names(clusters_2019_k8)
+
+row.names(clusters_2019_k8) <- NULL
+```
+
+```{r}
+data2019_k8 <- data %>% 
+  filter(year == 2019)
+```
+
+```{r}
+data2019_k8 <- merge(data2019_k8, clusters_2019_k8, by = "idnr")
+```
+
+
+#### Party proportions
+```{r}
+Clusteringdata_2019k8_cluster1 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "1")
+
+Clusteringdata_2019k8_cluster2 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "2")
+
+Clusteringdata_2019k8_cluster3 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "3")
+
+Clusteringdata_2019k8_cluster4 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "4")
+
+Clusteringdata_2019k8_cluster5 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "5")
+
+Clusteringdata_2019k8_cluster6 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "6")
+
+Clusteringdata_2019k8_cluster7 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "7")
+
+Clusteringdata_2019k8_cluster8 <- data2019_k8 %>% 
+  filter(clusters_2019_k8 == "8")
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc1_k8 <- prop.table(table(Clusteringdata_2019k8_cluster1$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc1_k8 <- as.data.frame(category_proportionsc1_k8)
+
+names(category_proportions_dfc1_k8) <- c("Party", "Proportion_C1")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 2
+category_proportionsc2_k8 <- prop.table(table(Clusteringdata_2019k8_cluster2$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc2_k8 <- as.data.frame(category_proportionsc2_k8)
+
+names(category_proportions_dfc2_k8) <- c("Party", "Proportion_C2")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 3
+category_proportionsc3_k8 <- prop.table(table(Clusteringdata_2019k8_cluster3$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc3_k8 <- as.data.frame(category_proportionsc3_k8)
+
+names(category_proportions_dfc3_k8) <- c("Party", "Proportion_C3")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 4
+category_proportionsc4_k8 <- prop.table(table(Clusteringdata_2019k8_cluster4$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc4_k8 <- as.data.frame(category_proportionsc4_k8)
+
+names(category_proportions_dfc4_k8) <- c("Party", "Proportion_C4")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 5
+category_proportionsc5_k8 <- prop.table(table(Clusteringdata_2019k8_cluster5$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc5_k8 <- as.data.frame(category_proportionsc5_k8)
+
+names(category_proportions_dfc5_k8) <- c("Party", "Proportion_C5")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc6_k8 <- prop.table(table(Clusteringdata_2019k8_cluster6$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc6_k8 <- as.data.frame(category_proportionsc6_k8)
+
+names(category_proportions_dfc6_k8) <- c("Party", "Proportion_C6")
+
+```
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc7_k8 <- prop.table(table(Clusteringdata_2019k8_cluster7$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc7_k8 <- as.data.frame(category_proportionsc7_k8)
+
+names(category_proportions_dfc7_k8) <- c("Party", "Proportion_C7")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for cluster 1
+category_proportionsc8_k8 <- prop.table(table(Clusteringdata_2019k8_cluster8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfc8_k8 <- as.data.frame(category_proportionsc8_k8)
+
+names(category_proportions_dfc8_k8) <- c("Party", "Proportion_C8")
+
+```
+
+
+```{r}
+# Calculate proportions of categories from cb10 for all
+
+category_proportionsk8 <- prop.table(table(data2019_k8$cb10))
+
+# Convert the result to a data frame for plotting
+category_proportions_dfk8 <- as.data.frame(category_proportionsk8)
+
+names(category_proportions_dfk8) <- c("Party", "Proportion_all")
+```
+
+```{r}
+merged_2019_k8 <- merge(category_proportions_dfc1_k8, category_proportions_dfc2_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc3_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc4_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc5_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc6_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc7_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfc8_k8, by = "Party")
+
+merged_2019_k8 <- merge(merged_2019_k8 , category_proportions_dfk8, by = "Party")
+
+```
+
+```{r}
+merged_2019_k8 <- merged_2019_k8 %>% 
+  mutate(Party = case_when(
+    Party == 1 ~ "Leftist Party",
+    Party == 2 ~ "Social Democrats",
+    Party == 3 ~ "Centre Party",
+    Party == 4 ~ "Liberals",
+    Party == 5 ~ "Moderate Party",
+    Party == 6 ~ "Christian Democrats",
+    Party == 7 ~ "Green Party",
+    Party == 10 ~ "Sweden Democrats"
+  ))
+
+merged_2019_k8 <- merged_2019_k8 %>% 
+  rename("Cluster 1 " = Proportion_C1,
+         "Cluster 2 " = Proportion_C2,
+         "Cluster 3 " = Proportion_C3,
+         "Cluster 4 " = Proportion_C4,
+         "Cluster 5 " = Proportion_C5,
+         "Cluster 6 " = Proportion_C6,
+         "Cluster 7 " = Proportion_C7,
+         "Cluster 8 " = Proportion_C8,
+         "All " = Proportion_all)
+
+merged_2019_k8 <- merged_2019_k8 %>%
+  mutate_at(vars(starts_with("Cluster")), funs(. * 100))
+
+merged_2019_k8 <- merged_2019_k8 %>%
+  mutate_at(vars(starts_with("All")), funs(. * 100))
+
+```
+
+```{r}
+table_proportions_cluster_2019k8 <- datasummary_df(merged_2019_k8, fmt = 0,
+               title = "Preferred party of respondents in each cluster, k=8, for 2019",
+               note = "Data from SOM",
+               output = "latex")
+```
+
+
+```{r echo=FALSE, include = TRUE}
+table_proportions_cluster_2019k8
+```
+
+
+#### Descriptives of lifestyle and class variables
+
+```{r}
+
+data2019_tabledata_k8 <- data2019_k8 %>% 
+  select(clusters_2019_k8,
+         praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         age,
+         sex_binary)
+
+
+```
+
+```{r}
+data2019_tabledata_k8 <- as.data.frame(data2019_tabledata_k8)
+
+
+data2019_tabledata_means_k8 <- data2019_tabledata_k8 %>%
+  mutate_all(as.numeric)
+
+data2019_tabledata_means_k8 <- data2019_tabledata_means_k8 %>%
+  mutate(clusters_2019_k8 = as.character(clusters_2019_k8))
+
+```
+
+```{r echo=FALSE, include = TRUE}
+# Table with descriptive statistics of the clusters. Here i use mean and sd. 
+
+datasummary_table_2019_k8 <- datasummary(
+  praying+
+         Cinema+
+         Rock_pop+
+         Theatre+
+         Classical_opera+
+         Library+
+         Pub_restaurant+
+         Drawn_painted+
+         Friends+
+         Church+
+         snus+
+         gamble_lottery+
+         p1+
+         euroesec_2+
+         Income+
+         Educationlevel+
+         Subjective_class_today+
+         age+
+         sex_binary ~ clusters_2019_k8 * (Mean) + Mean,
+            data = data2019_tabledata_means_k8,
+         title = "2019", 
+  output = "latex")
+
+
+
+```
+
+```{r}
+datasummary_table_2019_k8
+```
+
+#### Descriptive table
+
+```{r}
+datasummary(
+         sex_binary ~ clusters_2019_k8 * (Percent()) + N, #I use sex_binary as a placeholder to create a table. 
+            data = data2019_tabledata_means_k8,
+         title = "2019",
+         output = "latex")
+
+```
+
+
+
+
+# Year comparison
+
+```{r}
+table_proportions_cluster_2008
+table_proportions_cluster_2014
+table_proportions_cluster_2019
+```
+
+
+
+# Testing cluster validity
+
+
+# Multinomial
+
+```{r}
+
+test2008 <- multinom(cb10 ~ clusters_2008, data2008)
+
+test2014 <- multinom(cb10 ~ clusters_2014, data2014)
+
+test2019 <- multinom(cb10 ~ clusters_2019_k4, data2019)
+
+test2008
+
+test2014
+
+test2019
+
+```
+
+## 2008
+
+```{r}
+# Load the caret package
+library(caret)
+
+
+# Split data into training and test sets
+set.seed(123)  # Set seed for reproducibility
+splitIndex <- createDataPartition(data2008$cb10, p = 0.7, list = FALSE)
+train_data <- data2008[splitIndex, ]
+test_data <- data2008[-splitIndex, ]
+
+# Define formulas
+formula_clusters_2008 <- as.formula(paste("cb10 ~ clusters_2008"))
+
+
+# Fit the models on training data
+model_clusters_2008 <- multinom(formula_clusters_2008, data = train_data)
+
+
+# Predictions data frames
+predictions_clusters_2008 <- predict(model_clusters_2008, newdata = test_data)
+
+
+# Calculate accuracies
+accuracy_clusters_2008 <- sum(predictions_clusters_2008 == test_data$cb10) / nrow(test_data)
+
+
+# Print accuracies
+print("Accuracies for clusters 2008:")
+print(accuracy_clusters_2008)
+
+```
+
+## 2014
+
+```{r}
+
+# Split data into training and test sets
+set.seed(123)  # Set seed for reproducibility
+splitIndex <- createDataPartition(data2014$cb10, p = 0.7, list = FALSE)
+train_data <- data2014[splitIndex, ]
+test_data <- data2014[-splitIndex, ]
+
+# Define formulas
+formula_clusters_2014 <- as.formula(paste("cb10 ~ clusters_2014"))
+
+
+# Fit the models on training data
+model_clusters_2014 <- multinom(formula_clusters_2014, data = train_data)
+
+
+# Predictions data frames
+predictions_clusters_2014 <- predict(model_clusters_2014, newdata = test_data)
+
+
+# Calculate accuracies
+accuracy_clusters_2014 <- sum(predictions_clusters_2014 == test_data$cb10) / nrow(test_data)
+
+
+# Print accuracies
+print("Accuracies for clusters 2014:")
+print(accuracy_clusters_2014)
+
+```
+
+## 2019
+
+```{r}
+
+# Split data into training and test sets
+set.seed(123)  # Set seed for reproducibility
+splitIndex <- createDataPartition(data2019$cb10, p = 0.7, list = FALSE)
+train_data <- data2019[splitIndex, ]
+test_data <- data2019[-splitIndex, ]
+
+# Define formulas
+formula_clusters_2019_k4 <- as.formula(paste("cb10 ~ clusters_2019_k4"))
+
+
+# Fit the models on training data
+model_clusters_2019_k4 <- multinom(formula_clusters_2019_k4, data = train_data)
+
+
+# Predictions data frames
+predictions_clusters_2019_k4 <- predict(model_clusters_2019_k4, newdata = test_data)
+
+
+# Calculate accuracies
+accuracy_clusters_2019_k4 <- sum(predictions_clusters_2019_k4 == test_data$cb10) / nrow(test_data)
+
+
+# Print accuracies
+print("Accuracies for clusters 2019:")
+print(accuracy_clusters_2019_k4)
+
+```
+
+
+

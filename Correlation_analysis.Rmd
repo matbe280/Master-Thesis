@@ -1,0 +1,445 @@
+---
+title: "Correlations between class and culture"
+author: "Mattias Bengtsson"
+date: "2024-04-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r}
+library(tidyverse)
+library(FactoMineR)
+library(factoextra)
+library(explor)
+library(performanceEstimation)
+library(nnet)
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+```
+
+
+```{r}
+setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Correlations")#liu dator
+```
+```{r}
+#setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Correlations") 
+```
+
+
+```{r}
+imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Correlations/combined_imputed_data0121_incomeandcult.csv")
+
+#imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Correlations/combined_imputed_data0121_incomeandcult.csv")
+
+```
+
+
+```{r}
+#Making sure the variables are in factor. 
+data <- mutate_at(imputed_data_0121,
+                           vars(-year, -age, -idnr), 
+                           as.factor)
+```
+
+
+```{r}
+
+# Excluded parties that are not in the national parliament. 
+data <- data %>% 
+  filter(cb10 != "11" & cb10 != "12")
+
+# Updating the levels of the factor variable 'cb10', (preference for party) to reflect the dropped levels
+data$cb10 <- droplevels(data$cb10)
+
+```
+
+
+```{r}
+# Here I reordered the values so that they would reflect a similar scale as the other variables, where 1 = lowest value. 
+data <- data |> 
+  mutate(p1 = case_when(
+    jc10a == "1" ~ "6",
+    jc10a == "2" ~ "5",
+    jc10a == "3" ~ "4",
+    jc10a == "4"~ "3",
+    jc10a == "5" ~ "2",
+    jc10a == "6" ~ "1"
+  ))
+
+data <- data |> 
+  mutate(euroesec_2 = case_when(
+    euroesec == "1" ~ "9",
+    euroesec == "2" ~ "8",
+    euroesec == "3" ~ "7",
+    euroesec == "4"~ "6",
+    euroesec == "5" ~ "5",
+    euroesec == "6" ~ "4",
+    euroesec == "7" ~ "3",
+    euroesec == "8" ~ "2",
+    euroesec == "9" ~ "1"
+  ))
+```
+
+
+```{r}
+#Here i Rename variables
+data <- data %>%  
+  mutate(praying = bc20,
+         Cinema = la10,
+         Rock_pop = lb10b,
+         Theatre = lb10a,
+         Classical_opera = lb10e,
+         Library = eg10,
+         Pub_restaurant = ma50c,
+         Drawn_painted = le10c,
+         Friends = ma10a,
+         Church = bc10,
+         snus = ma40h,
+         gamble_lottery = mc10c,
+         Generations = genzukin,
+         Subjective_class_today = subclg, 
+         Income = hinc5rel,
+         Educationlevel = edu3
+         )
+```
+
+
+## All years
+```{r}
+# Choosing variables to use for correlation between the variables when looking at data with all years
+correlationdata <- data %>% 
+  select(praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         cb10,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         subclh,
+         age,
+         sex)
+
+correlationdata <- correlationdata %>% 
+  mutate_all(as.numeric)
+
+# Removing NA
+correlationdata <- na.omit(correlationdata)
+
+```
+
+```{r}
+# Creating correlation matrix with Pearson. 
+cor_matrix <- cor(correlationdata, method = "pearson")
+print(cor_matrix)
+```
+
+```{r}
+# Convert the correlation matrix to long format to be able to plot it. 
+cor_matrix_long <- melt(cor_matrix)
+```
+
+```{r}
+# Making names more obvious
+custom_variable_names <- c(
+  "Praying", "Cinema", "Rock/Pop", "Theatre", "Classical/Opera", 
+  "Library", "Pub/Restaurant", "Drawn/Painted", "Friends", "Church", 
+  "Snus", "Gamble/Lottery", "Classical radio", "Party Affiliation", "Social Class Euroesec", 
+  "Income", "Education Level", "Subjective Class Today", "Subjective class upbringing", "Age", "Sex"
+)
+```
+
+
+```{r}
+# Creating heatmap
+all_years <- ggplot(cor_matrix_long, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+ggtitle("Correlation matrix for all years")+ 
+  labs(
+       x = NULL,  
+       y = NULL) + scale_x_discrete(labels = custom_variable_names) + 
+  scale_y_discrete(labels = custom_variable_names)+
+geom_vline(xintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = which(custom_variable_names == "Party Affiliation"), y = length(custom_variable_names), label = "", color = "black", size = 4, vjust = -1)+
+  geom_hline(yintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = length(custom_variable_names), y = which(custom_variable_names == "Party Affiliation"), label = "", color = "black", size = 4, hjust = -1)
+
+```
+
+
+```{r}
+#Observing the plot
+all_years
+```
+
+
+
+```{r}
+# Saving the plot
+ggsave("correlation_allyears.png", plot = all_years, width = 10, height = 8, dpi = 300)
+
+```
+
+## 2008
+
+
+```{r}
+# Choosing variables to use for correlation between the variables when looking at data from 2008
+correlationdata_2008 <- data %>% 
+  filter(year == 2008) %>% 
+  select(praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         cb10,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         subclh,
+         age)
+
+correlationdata_2008 <- correlationdata_2008 %>% 
+  mutate_all(as.numeric)
+
+# Removing NA
+correlationdata_2008 <- na.omit(correlationdata_2008)
+```
+
+```{r}
+# Creating correlation matrix with Pearson. 
+cor_matrix_2008 <- cor(correlationdata_2008, method = "pearson")
+print(cor_matrix_2008)
+```
+
+```{r}
+# Convert the correlation matrix to long format to plot it
+cor_matrix_long_2008 <- melt(cor_matrix_2008)
+```
+
+
+```{r}
+# Creating heatmap
+correlation_2008 <- ggplot(cor_matrix_long_2008, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+ ggtitle("Correlation matrix for year 2008")+ 
+  labs(
+       x = NULL,  
+       y = NULL) + scale_x_discrete(labels = custom_variable_names) + 
+  scale_y_discrete(labels = custom_variable_names)+  
+geom_vline(xintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = which(custom_variable_names == "Party Affiliation"), y = length(custom_variable_names), label = "", color = "black", size = 4, vjust = -1)+
+  geom_hline(yintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = length(custom_variable_names), y = which(custom_variable_names == "Party Affiliation"), label = "", color = "black", size = 4, hjust = -1)  
+```
+
+```{r}
+# Showing the plot
+correlation_2008
+```
+
+```{r}
+# Saving the plot
+ggsave("correlations_2008.png", plot = correlation_2008, width = 10, height = 8, dpi = 300)
+
+```
+
+
+# 2014
+
+```{r}
+# Choosing variables to use for correlation between the variables when looking at data from 2014
+correlationdata_2014 <- data %>% 
+  filter(year == 2014) %>% 
+  select(praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         cb10,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         subclh,
+         age)
+
+correlationdata_2014 <- correlationdata_2014 %>% 
+  mutate_all(as.numeric)
+
+# Removing NA
+correlationdata_2014 <- na.omit(correlationdata_2014)
+```
+
+```{r}
+# Creating correlation matrix with Pearson. 
+cor_matrix_2014 <- cor(correlationdata_2014, method = "pearson")
+print(cor_matrix_2014)
+```
+
+```{r}
+# Convert the correlation matrix to long format
+cor_matrix_long_2014 <- melt(cor_matrix_2014)
+
+# Create a heatmap
+correlation_2014 <- ggplot(cor_matrix_long_2014, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Correlation matrix for year 2014")+ 
+  labs(
+       x = NULL,  
+       y = NULL) + scale_x_discrete(labels = custom_variable_names) + 
+  scale_y_discrete(labels = custom_variable_names)+  
+geom_vline(xintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = which(custom_variable_names == "Party Affiliation"), y = length(custom_variable_names), label = "", color = "black", size = 4, vjust = -1)+
+  geom_hline(yintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = length(custom_variable_names), y = which(custom_variable_names == "Party Affiliation"), label = "", color = "black", size = 4, hjust = -1)  
+```
+
+```{r}
+# Plot it
+correlation_2014
+```
+
+```{r}
+# Saving the plot
+ggsave("correlations_2014.png", plot = correlation_2014, width = 10, height = 8, dpi = 300)
+
+```
+
+## 2019
+
+
+```{r}
+# Choosing variables to use for correlation between the variables when looking at data from 2019
+correlationdata_2019 <- data %>% 
+  filter(year == 2019) %>% 
+  select(praying,
+         Cinema,
+         Rock_pop,
+         Theatre,
+         Classical_opera,
+         Library,
+         Pub_restaurant,
+         Drawn_painted,
+         Friends,
+         Church,
+         snus,
+         gamble_lottery,
+         p1,
+         cb10,
+         euroesec_2,
+         Income,
+         Educationlevel,
+         Subjective_class_today,
+         subclh,
+         age)
+
+correlationdata_2019 <- correlationdata_2019 %>% 
+  mutate_all(as.numeric)
+
+# Removing NA
+correlationdata_2019 <- na.omit(correlationdata_2019)
+```
+
+```{r}
+# Creating correlation matrix with Pearson. 
+cor_matrix_2019 <- cor(correlationdata_2019, method = "pearson")
+print(cor_matrix_2019)
+```
+
+```{r}
+# Convert the correlation matrix to long format
+cor_matrix_long_2019 <- melt(cor_matrix_2019)
+
+# Create a heatmap
+correlation_2019 <- ggplot(cor_matrix_long_2019, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Pearson\nCorrelation") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Correlation matrix for year 2019")+ 
+  labs(
+       x = NULL,  
+       y = NULL) + scale_x_discrete(labels = custom_variable_names) + 
+  scale_y_discrete(labels = custom_variable_names)  +  
+geom_vline(xintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = which(custom_variable_names == "Party Affiliation"), y = length(custom_variable_names), label = "", color = "black", size = 4, vjust = -1)+
+  geom_hline(yintercept = which(custom_variable_names == "Party Affiliation") - 0.5, color = "black", linetype = "dashed") +
+  annotate("text", x = length(custom_variable_names), y = which(custom_variable_names == "Party Affiliation"), label = "", color = "black", size = 4, hjust = -1)
+```
+
+```{r}
+# Plotting it
+correlation_2019
+```
+
+```{r}
+# Saving the plot
+ggsave("correlations_2019.png", plot = correlation_2019, width = 10, height = 8, dpi = 300)
+
+```
+
+
+## Comparison
+
+```{r}
+all_correlationplots <- grid.arrange(all_years, correlation_2008, correlation_2014, correlation_2019, ncol = 2)
+```
+
+
+```{r}
+ggsave("all_correlationplots.png", plot = all_correlationplots, width = 20, height = 15, dpi = 300)
+```
+
+
+

@@ -1,0 +1,465 @@
+---
+title: "Multinomial logit"
+author: "Mattias Bengtsson"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+All generations 
+
+
+# Setup
+
+```{r}
+
+library(tidyverse)
+library(randomForest)
+library(nnet)
+library(modelsummary)
+```
+
+
+```{r}
+setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions")#liu dator
+```
+```{r}
+#setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions") #Egen dator
+```
+
+
+```{r}
+imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/combined_imputed_data0121_incomeandcult.csv")
+
+#imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/combined_imputed_data0121_incomeandcult.csv")
+```
+
+In this analysis I aim to test different operationalizations of the concept "Class" to evaluate if they differ in their ability to predict preferred party.
+
+```{r}
+data <- mutate_at(imputed_data_0121,
+                           vars(-year, -age, -idnr), 
+                           as.factor)
+```
+I will now check the amount of levels available for the different years in CB10 (favorite party).
+
+```{r}
+possible_parties_2005 <- data %>%
+  filter(year == 2005) %>%
+  pull(cb10) %>%
+  levels()
+print(possible_parties_2005)
+
+
+possible_parties_2007 <- data %>%
+  filter(year == 2007) %>%
+  pull(cb10) %>%
+  levels()
+print(possible_parties_2007)
+
+```
+```{r}
+# Assuming 'data' is your dataframe containing the variable 'cb10'
+
+# Filter the data to exclude levels 11 and 12 from the variable 'cb10'
+# I do this since they represent parties that i do not want to include in the analysis. 
+data <- data %>% 
+  filter(cb10 != "11" & cb10 != "12")
+
+# Updating the levels of the factor variable 'cb10' to reflect the dropped levels
+data$cb10 <- droplevels(data$cb10)
+
+```
+
+###  Lifestyle 
+
+```{r}
+# Create an empty list to store the filtered datasets
+filtered_datasets <- list()
+
+# Loop through the years from 2008 to 2016
+for (year in 2008:2021) {
+  # Skip year 2016 since all lifestyle variables are not available
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  
+  # Filter the dataset for the current year 
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Store the filtered dataset in the list
+  filtered_datasets[[as.character(year)]] <- current_data
+  
+
+#Training the model for the current year
+model_life <- multinom(cb10 ~ mc10c + mb99b + ma50c + ma40h + lb10a + ma10a + la10 + jc10a + eg10 + bc10 + bc20 + lb10e + lb10b + le10c, data = current_data)
+  
+# Save the model with the corresponding name
+assign(paste("model_life", year, sep = ""), model_life)
+
+# Print the summary of the model
+print(paste("Multinomial Model for Year", year))
+print(summary(model_life))
+
+}
+```
+
+
+```{r}
+# Create an empty dataframe to store the results
+eval_datalife <- data.frame(year = numeric(), logLikelihood = numeric(), AIC = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Extract the model for the current year
+  current_model <- get(paste("model_life", year, sep = ""))
+  
+  # Compute log-likelihood for the current model
+  logLikelihood <- logLik(current_model)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(current_model)
+  
+  # Append the year, log-likelihood, and AIC to the dataframe
+  eval_datalife <- rbind(eval_datalife, data.frame(year = year, logLikelihood = logLikelihood, AIC = AIC_value))
+}
+
+# Print the compiled dataframe
+print(eval_datalife)
+
+```
+
+#### euroesec
+
+```{r}
+# Create an empty list to store the filtered datasets
+filtered_datasets <- list()
+
+# Loop through the years from 2008 to 2016
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  
+  # Filter the dataset for the current year
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Store the filtered dataset in the list
+  filtered_datasets[[as.character(year)]] <- current_data
+  
+  # Train the random forest model for the current year
+model_euroesec <- multinom(cb10 ~ euroesec, data = current_data)
+
+# Save the model with the corresponding name
+assign(paste("model_euroesec", year, sep = ""), model_euroesec)
+
+# Print the summary of the model
+print(paste("Multinomial Model for Year", year))
+print(summary(model_euroesec))
+
+}
+```
+
+
+```{r}
+# Create an empty dataframe to store the results
+eval_dataeuroesec <- data.frame(year = numeric(), logLikelihood_euroesec = numeric(), AIC_euroesec = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Extract the model for the current year
+  current_model <- get(paste("model_euroesec", year, sep = ""))
+  
+  # Compute log-likelihood for the current model
+  logLikelihood_euroesec <- logLik(current_model)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(current_model)
+  
+  # Append the year, log-likelihood, and AIC to the dataframe
+  eval_dataeuroesec <- rbind(eval_dataeuroesec, data.frame(year = year, logLikelihood_euroesec = logLikelihood_euroesec, AIC_euroesec = AIC_value))
+}
+
+# Print the compiled dataframe
+print(eval_dataeuroesec)
+
+```
+
+
+### Subclg
+
+### Sublcg
+```{r}
+# Create an empty list to store the filtered datasets
+filtered_datasets_subclg <- list()
+
+# Loop through the years from 2008 to 2016
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Filter the dataset for the current year
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Store the filtered dataset in the list
+  filtered_datasets[[as.character(year)]] <- current_data
+  
+  # Train the random forest model for the current year
+  modelsubclg <- multinom(cb10 ~ subclg, data = current_data)
+  
+  # Save the model with the corresponding name
+  assign(paste("modelsubclg", year, sep = ""), modelsubclg)
+  
+  # Print the summary of the model
+  print(paste("Multinomial Model for Year", year))
+  print(modelsubclg)
+}
+```
+
+```{r}
+# Create an empty dataframe to store the results
+eval_datasubclg <- data.frame(year = numeric(), logLikelihood_subclg = numeric(), AIC_subclg = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Extract the model for the current year
+  current_model <- get(paste("modelsubclg", year, sep = ""))
+  
+  # Compute log-likelihood for the current model
+  logLikelihood_subclg <- logLik(current_model)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(current_model)
+  
+  # Append the year, log-likelihood, and AIC to the dataframe
+  eval_datasubclg <- rbind(eval_datasubclg, data.frame(year = year, logLikelihood_subclg = logLikelihood_subclg, AIC_subclg = AIC_value))
+}
+
+# Print the compiled dataframe
+print(eval_datasubclg)
+
+```
+## Full class model
+```{r}
+# Create an empty list to store the filtered datasets
+filtered_datasets <- list()
+
+# Loop through the years from 2008 to 2016
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Filter the dataset for the current year
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Store the filtered dataset in the list
+  filtered_datasets[[as.character(year)]] <- current_data
+  
+  # Train the random forest model for the current year
+  modelfullclass <- multinom(cb10 ~ edu3 + subclg + sublch + euroesec + hinc5rel, data = current_data)
+  
+  # Save the model with the corresponding name
+  assign(paste("modelfullclass", year, sep = ""), modelfullclass)
+  
+  # Print the summary of the model
+  print(paste("Multinomial Model for Year", year))
+  print(modelfullclass)
+}
+```
+
+```{r}
+# Create an empty dataframe to store the results
+eval_datafullclass <- data.frame(year = numeric(), logLikelihood_fullclass = numeric(), AIC_fullclass = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Extract the model for the current year
+  current_model <- get(paste("modelfullclass", year, sep = ""))
+  
+  # Compute log-likelihood for the current model
+  logLikelihood_fullclass <- logLik(current_model)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(current_model)
+  
+  # Append the year, log-likelihood, and AIC to the dataframe
+  eval_datafullclass <- rbind(eval_datafullclass, data.frame(year = year, logLikelihood_fullclass = logLikelihood_fullclass, AIC_fullclass = AIC_value))
+}
+
+# Print the compiled dataframe
+print(eval_datafullclass)
+
+```
+
+# Train vs test 
+
+## Full class model
+```{r}
+set.seed(123)
+
+# Storing result
+eval_datafullclass <- data.frame(year = numeric(), logLikelihood_fullclass = numeric(), AIC_fullclass = numeric(), accuracy_fullclass = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016 due to missing variables
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Filter the dataset for the current year
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Splitting the data into training and test. Here i use a 70/30 % split. 
+  train_index <- sample(1:nrow(current_data), 0.7 * nrow(current_data))
+  train_data <- current_data[train_index, ]
+  test_data <- current_data[-train_index, ]
+  
+  # Train the multinomial logit model on the training data
+  modelfullclass <- multinom(cb10 ~ edu3 + subclg + subclh + euroesec + hinc5rel, data = train_data)
+  
+  # Compute log-likelihood for the current model
+  logLikelihood_fullclass <- logLik(modelfullclass)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(modelfullclass)
+  
+  # Predict using the test data
+  predictions <- predict(modelfullclass, newdata = test_data)
+  
+  # Compute accuracy
+  accuracy_fullclass <- sum(predictions == test_data$cb10) / length(predictions)
+  
+  # Append the year, log-likelihood, AIC, and accuracy to the dataframe
+  eval_datafullclass <- rbind(eval_datafullclass, data.frame(year = year, logLikelihood_fullclass = logLikelihood_fullclass, AIC_fullclass = AIC_value, accuracy_fullclass = accuracy_fullclass))
+}
+
+# Print the compiled dataframe
+print(eval_datafullclass)
+
+```
+
+
+## Lifestyle
+
+```{r}
+set.seed(123)
+
+# Storing result
+eval_datalifestyle <- data.frame(year = numeric(), logLikelihood_lifestyle = numeric(), AIC_lifestyle = numeric(), accuracy_lifestyle = numeric())
+
+# Loop through the years from 2008 to 2021
+for (year in 2008:2021) {
+  # Skip year 2016 due to missing variables
+  if (year == 2016) {
+    next  # Skip the current iteration and move to the next year
+  }
+  # Filter the dataset for the current year
+  current_data <- data[data$year == year, ]
+  
+  # Remove columns with no data
+  current_data <- current_data[, colSums(!is.na(current_data)) > 0]
+  
+  # Splitting the data into training and test. Here i use a 70/30 % split. 
+  train_index <- sample(1:nrow(current_data), 0.7 * nrow(current_data))
+  train_data <- current_data[train_index, ]
+  test_data <- current_data[-train_index, ]
+  
+  # Train the multinomial logit model on the training data
+  modellifestyle <- multinom(cb10 ~ mc10c + mb99b + ma50c + ma40h + lb10a + ma10a + la10 + jc10a + eg10 + bc10 + bc20 + lb10e + lb10b + le10c, data = train_data)
+  
+  # Compute log-likelihood for the current model
+  logLikelihood_lifestyle <- logLik(modellifestyle)[1]
+  
+  # Compute AIC for the current model
+  AIC_value <- AIC(modellifestyle)
+  
+  # Predict using the test data
+  predictions_lifestyle <- predict(modellifestyle, newdata = test_data)
+  
+  # Compute accuracy
+  accuracy_lifestyle <- sum(predictions_lifestyle == test_data$cb10) / length(predictions_lifestyle)
+  
+  # Append the year, log-likelihood, AIC, and accuracy to the dataframe
+  eval_datalifestyle <- rbind(eval_datalifestyle, data.frame(year = year, logLikelihood_lifestyle = logLikelihood_lifestyle, AIC_lifestyle = AIC_value, accuracy_lifestyle = accuracy_lifestyle))
+}
+
+# Print the compiled dataframe
+print(eval_datalifestyle)
+
+```
+
+
+### Merging
+```{r}
+
+merged_aic_log <- merge(eval_datasubclg, eval_dataeuroesec)
+
+merged_aic_log <- merge(merged, eval_datalife)
+
+```
+
+```{r}
+merged_accuracy <- merge(eval_datafullclass, eval_datalifestyle)
+
+table_accuracy <- merged_accuracy %>% 
+  select(-logLikelihood_fullclass, -logLikelihood_lifestyle)
+```
+```{r}
+datasummary_df(table_accuracy,
+               output = "latex")
+```
+
+
+```{r}
+# Using same sample size
+multi_FL <- ggplot(merged_accuracy, aes(x = year)) +
+  geom_line(aes(y = accuracy_fullclass, color = "Full class model"), linewidth = 1.1) +
+  geom_line(aes(y = accuracy_lifestyle, color = "Lifestyle model"), linewidth = 1.1)+
+  labs(x = "Year", y = "Accuracy", color = "Models") +
+  ggtitle("Accuracy on test data, multinomial logit") +
+  theme_minimal()+   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) + 
+  xlim(2008, 2021)
+```
+
+```{r}
+ggsave("multinomial.pdf", multi_FL, width = 8, height = 6, units = "in", dpi = 300)
+
+```
+
