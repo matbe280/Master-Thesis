@@ -9,7 +9,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE, include = FALSE)
 ```
 
-Here predictions are made with random forest for all generations on CB10 and Socialist/not socialist. 
+Here predictions are made with random forest for a Party preference (CB10), and Socialist/not socialist (constructed from CB10). 
 
 # Setup
 
@@ -19,11 +19,11 @@ library(tidyverse)
 library(randomForest)
 library(modelsummary)
 library(performanceEstimation)
-
 ```
 
 
 ```{r}
+#Setting the work directory
 #setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions")#liu dator
 ```
 ```{r}
@@ -32,6 +32,7 @@ setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predi
 
 
 ```{r}
+#Loading the imputed dataset
 #imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/combined_imputed_data0121_incomeandcult.csv")
 
 imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/combined_imputed_data0121_incomeandcult.csv")
@@ -57,34 +58,36 @@ data$cb10 <- droplevels(data$cb10)
 
 
 ```{r}
-#Constructing the Socialist or Not variable, 1 = socialist party, 0 = Not socialist. 
+# Constructing the "Socialist or not" variable, in accordance with definition in the thesis.
+# 1 = socialist, 0 = non-socialist
 data <- data %>% 
   mutate(socialist = case_when(
-    cb10 == "1" ~ "1",  
-    cb10 == "2" ~ "1",  
-    cb10 == "7" ~ "1",
+    cb10 == "1" ~ "1",  # Left party
+    cb10 == "2" ~ "1",  # Social Democrats
+    cb10 == "7" ~ "1",  # Green party
     TRUE ~ "0"
   ))
 ```
 
 ```{r}
+# Making sure it is a factor variable 
 data$socialist <- as.factor(data$socialist)
-
-class(data$socialist)
 ```
 
 
-```{r}
+## Analysing data per year
 
-filtered_data <- subset(data, year >= 2008 & year <= 2021)
+```{r}
+filtered_data <- subset(data, year >= 2008 & year <= 2021) # Filtering out data per year, 2008 to 2021. 
 
 dataperyear <- table(filtered_data$year)
 
 dataperyear <- data.frame(dataperyear)
+```
 
 
-
-
+```{r}
+# Creating a plot with the amount of observations for each year. 
 
 dataplot <- ggplot(dataperyear, aes(x = Var1, y = Freq)) +
      geom_bar(stat = "identity", fill = "lightblue", width = 0.7) +  # Bar plot
@@ -97,14 +100,23 @@ print(dataplot)
 
 
 # CB10 as outcome variable 
+
+Here i use CB10 as outcome variable (preference for party X). These models thus aim to answer research question Are lifestyle indicators increasingly predictive of party preference in Sweden?
+
+For each model, the first loop predicts which party the respondents prefer for each year, and saves the results for each year. 
+
+In the next loop, i retrieve the OOB results from each year in a dataframe. This dataframe thus contains the OOB error rate for each year. 
+
+After that all models with different variable selections have run, i merge the OOB results from each different model into one dataframe. This dataframe is then used to create tables, and plots that is analysed. The same process is done for the models with the outcome variable "Socialist party". 
+
 ###  Lifestyle 
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets (filtered by year).
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -114,16 +126,16 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
+  # Storing the filtered dataset in the list
   filtered_datasets[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
+  # Training the random forest model for the current year
   model_life <- randomForest(cb10 ~ mc10c +  ma50c + ma40h + lb10a + ma10a + la10 + jc10a + eg10 + bc10 + bc20 + lb10e + lb10b + le10c, data  = current_data)
   
-  # Save the model with the corresponding name
+ # Saving the model with the corresponding name. This name is called in the next loop to retrieve the oob
   assign(paste("model_life", year, sep = ""), model_life)
   
   # Print the summary of the model
@@ -134,10 +146,10 @@ for (year in 2008:2021) {
 
 ```{r}
 
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_datalife <- data.frame(year = numeric(), OOBlife = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -149,7 +161,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datalife <- rbind(oob_datalife, data.frame(year = year, OOBlife = current_oob))
 }
 
@@ -158,45 +170,15 @@ print(oob_datalife)
 
 ```
 
-```{r}
-importance(model_life2011)
-```
 
-```{r}
-top_variable_data_life <- data.frame(year = numeric(), top_variable_life = character())
-
-# Loop through the years from 2008 to 2021
-for (year in 2008:2021) {
-  # Skip year 2016
-  if (year == 2016) {
-    next  # Skip the current iteration and move to the next year
-  }
-  # Extract the model for the current year
-  current_model <- get(paste("model_life", year, sep = ""))
-  
-  # Extract variable importance for the current model
-  current_variable_importance <- importance(current_model)
-  
-  # Find the top variable for the current year
-  top_variable_life <- rownames(current_variable_importance)[which.max(current_variable_importance)]
-  
-  # Append the year and top variable to the dataframe
-  top_variable_data_life <- rbind(top_variable_data_life, data.frame(year = year, top_variable_life = top_variable_life))
-}
-
-# Print the compiled dataframe
-print(top_variable_data_life)
-
-
-```
 ### Euroesec
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -206,86 +188,88 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
+  # Storing the filtered dataset in the list
   filtered_datasets[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
-  model_euroesec <- randomForest(cb10 ~ euroesec, data  = current_data)
+  # Training the random forest model for the current year
+  model_euroesec <- randomForest(cb10 ~ euroesec, data = current_data)
   
-  # Save the model with the corresponding name
+  # Saving the model with the corresponding name
   assign(paste("model_euroesec", year, sep = ""), model_euroesec)
   
   # Print the summary of the model
   print(paste("Random Forest Model for Year", year))
   print(model_euroesec)
 }
+
 ```
 
 ```{r}
-
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_dataeuroesec <- data.frame(year = numeric(), OOBeuroesec = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
+  
   # Extract the model for the current year
   current_model <- get(paste("model_euroesec", year, sep = ""))
   
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_dataeuroesec <- rbind(oob_dataeuroesec, data.frame(year = year, OOBeuroesec = current_oob))
 }
 
 # Print the compiled dataframe
 print(oob_dataeuroesec)
 
+
 ```
 
 ### Sublch 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets_subclh <- list()
 
-# Loop through the years from 2008 to 2016
+# Loop through the years from 2001 to 2021
 for (year in 2001:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
-  filtered_datasets[[as.character(year)]] <- current_data
+  # Storing the filtered dataset in the list
+  filtered_datasets_subclh[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
+  # Training the random forest model for the current year
   modelsubclh <- randomForest(cb10 ~ subclh, data = current_data)
   
-  # Save the model with the corresponding name
+  # Saving the model with the corresponding name
   assign(paste("modelsubclh", year, sep = ""), modelsubclh)
   
   # Print the summary of the model
   print(paste("Random Forest Model for Year", year))
   print(modelsubclh)
 }
+
 ```
 
 
 ```{r}
-
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_datasubclh <- data.frame(year = numeric(), OOBsubclh = numeric())
 
-# Loop through the years from 2008 to 2021
+# Loop through the years from 2001 to 2021
 for (year in 2001:2021) {
   # Extract the model for the current year
   current_model <- get(paste("modelsubclh", year, sep = ""))
@@ -293,7 +277,7 @@ for (year in 2001:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datasubclh <- rbind(oob_datasubclh, data.frame(year = year, OOBsubclh = current_oob))
 }
 
@@ -305,39 +289,39 @@ print(oob_datasubclh)
 ### Sublcg
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets_subclg <- list()
 
-# Loop through the years from 2008 to 2016
+# Loop through the years from 2001 to 2021
 for (year in 2001:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
-  filtered_datasets[[as.character(year)]] <- current_data
+  # Storing the filtered dataset in the list
+  filtered_datasets_subclg[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
+  # Training the random forest model for the current year
   modelsubclg <- randomForest(cb10 ~ subclg, data = current_data)
   
-  # Save the model with the corresponding name
+  # Saving the model with the corresponding name
   assign(paste("modelsubclg", year, sep = ""), modelsubclg)
   
   # Print the summary of the model
   print(paste("Random Forest Model for Year", year))
   print(modelsubclg)
 }
+
 ```
 
 
 ```{r}
-
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_datasubclg <- data.frame(year = numeric(), OOBsubclg = numeric())
 
-# Loop through the years from 2008 to 2021
+# Loop through the years from 2001 to 2021
 for (year in 2001:2021) {
   # Extract the model for the current year
   current_model <- get(paste("modelsubclg", year, sep = ""))
@@ -345,12 +329,13 @@ for (year in 2001:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datasubclg <- rbind(oob_datasubclg, data.frame(year = year, OOBsubclg = current_oob))
 }
 
 # Print the compiled dataframe
 print(oob_datasubclg)
+
 
 ```
 
@@ -360,39 +345,39 @@ print(oob_datasubclg)
 
 ```{r}
 set.seed(123)
-
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets_hinc5 <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
-  filtered_datasets[[as.character(year)]] <- current_data
+  # Storing the filtered dataset in the list
+  filtered_datasets_hinc5[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
-  modelhinc5 <- randomForest(cb10 ~ hinc5rel , data = current_data)
+  # Training the random forest model for the current year
+  modelhinc5 <- randomForest(cb10 ~ hinc5rel, data = current_data)
   
-  # Save the model with the corresponding name
+  # Saving the model with the corresponding name
   assign(paste("modelhinc5", year, sep = ""), modelhinc5)
   
   # Print the summary of the model
   print(paste("Random Forest Model for Year", year))
-print(modelhinc5)
+  print(modelhinc5)
 }
+
 ```
 
 
 ```{r}
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_datahinc5 <- data.frame(year = numeric(), OOBhinc5 = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Extract the model for the current year
   current_model <- get(paste("modelhinc5", year, sep = ""))
@@ -400,38 +385,42 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datahinc5 <- rbind(oob_datahinc5, data.frame(year = year, OOBhinc5 = current_oob))
 }
+
+# Print the compiled dataframe
+print(oob_datahinc5)
+
 ```
 
 ### Class + lifestyle 
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
   
-  # Filter the dataset for the current year
+  # Filtering the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
-  # Store the filtered dataset in the list
+  # Storing the filtered dataset in the list
   filtered_datasets[[as.character(year)]] <- current_data
   
-  # Train the random forest model for the current year
+  # Training the random forest model for the current year
   model_classlifestyle <- randomForest(cb10 ~ euroesec + subclg + subclh + hinc5rel + edu3 + mc10c + mb99b + ma50c + ma40h + lb10a + ma10a + la10 + jc10a + eg10 + bc10 + bc20 + lb10e + lb10b + le10c, data  = current_data)
   
-  # Save the model with the corresponding name
+  # Saving the model with the corresponding name
   assign(paste("model_classlifestyle", year, sep = ""), model_classlifestyle)
   
   # Print the summary of the model
@@ -442,7 +431,7 @@ for (year in 2008:2021) {
 
 ```{r}
 
-# Create an empty dataframe to store the results
+# Creating an empty dataframe to store the results
 oob_dataclasslifestyle <- data.frame(year = numeric(), OOBclasslifestyle = numeric())
 
 # Looping through the years from 2008 to 2021
@@ -450,13 +439,13 @@ for (year in 2008:2021) {
   if (year == 2016) {
     next  # Skip the current iteration if 2016 and move to the next year
   }
-  # Extract the model for the current year
+  # Extracting the model for the current year
   current_model <- get(paste("model_classlifestyle", year, sep = ""))
   
-  # Extract the OOB error for the current model
+  # Extracting the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_dataclasslifestyle <- rbind(oob_dataclasslifestyle, data.frame(year = year, OOBclasslifestyle = current_oob))
 }
 
@@ -470,10 +459,10 @@ for (year in 2008:2021) {
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -483,7 +472,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -517,7 +506,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datafullclass <- rbind(oob_datafullclass, data.frame(year = year, OOBfullclass = current_oob))
 }
 
@@ -529,23 +518,27 @@ for (year in 2008:2021) {
 
 ## Merging
 
+Here I merge all the dataframes with the OOB-errors together. That way i can produce a table with them all together, and plots. 
+
 ```{r}
+# Lifestyle model merged with euroesec
 merged_generations_life <- merge(oob_datalife, oob_dataeuroesec)
 
-# Subjective clas shome
+# Adding subjective home class
 merged_generations_life <- merge(merged_generations_life, oob_datasubclh)
 
 
-#Subjective class today
+# Adding Subjective class today
 merged_generations_life <- merge(merged_generations_life, oob_datasubclg)
 
 
-# Income class
+# Adding Income class
 merged_generations_life <- merge(merged_generations_life, oob_datahinc5)
 
-# Full class
+# Adding Full class model
 merged_generations_life <- merge(merged_generations_life, oob_datafullclass)
 
+# Adding the class and lifestyle model
 merged_generations_life <- merge(merged_generations_life, oob_dataclasslifestyle)
 
 ```
@@ -556,6 +549,7 @@ merged_generations_life
 
 
 ```{r}
+# Output which is used to produce table in Overleaf
 datasummary_df(merged_generations_life,
                output = "latex")
 ```
@@ -563,8 +557,9 @@ datasummary_df(merged_generations_life,
 
 ### Plotting
 
+This plot shows the OOB-error rate over time, for each model, with party preference as outcome. 
 ```{r}
-# Using full sample sizes
+
 randomforestplot <- ggplot(merged_generations_life, aes(x = year)) +
   geom_line(aes(y = OOBlife, color = "Lifestyle"), linewidth = 1.3) +
  # geom_line(aes(y = OOBeuroesec, color = "Euroesec"), linewidth = 1.3)+
@@ -588,17 +583,15 @@ ggsave("randomforestplot_cb10_ny.pdf", randomforestplot, width = 8, height = 6, 
 ```
 
 # Same for Socialist outcome
-
-
-
+Down below the same routine is performed, but with the constructed "Socialist" variable. 
 ###  Lifestyle 
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -608,7 +601,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -631,7 +624,7 @@ for (year in 2008:2021) {
 # Create an empty dataframe to store the results
 oob_datalife_sc <- data.frame(year = numeric(), OOBlife_sc = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -643,7 +636,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datalife_sc <- rbind(oob_datalife_sc, data.frame(year = year, OOBlife_sc = current_oob))
 }
 
@@ -657,10 +650,10 @@ print(oob_datalife_sc)
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -670,7 +663,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -693,7 +686,7 @@ for (year in 2008:2021) {
 # Create an empty dataframe to store the results
 oob_dataeuroesec_sc <- data.frame(year = numeric(), OOBeuroesec_sc = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -705,7 +698,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_dataeuroesec_sc <- rbind(oob_dataeuroesec_sc, data.frame(year = year, OOBeuroesec_sc = current_oob))
 }
 
@@ -717,10 +710,10 @@ print(oob_dataeuroesec)
 ### Sublch 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -729,7 +722,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -753,7 +746,7 @@ for (year in 2008:2021) {
 # Create an empty dataframe to store the results
 oob_datasubclh_sc <- data.frame(year = numeric(), OOBsubclh_sc = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -765,7 +758,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datasubclh_sc <- rbind(oob_datasubclh_sc, data.frame(year = year, OOBsubclh_sc = current_oob))
 }
 
@@ -777,10 +770,10 @@ print(oob_datasubclh_sc)
 ### Sublcg
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -789,7 +782,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -813,7 +806,7 @@ for (year in 2008:2021) {
 # Create an empty dataframe to store the results
 oob_datasubclg_sc <- data.frame(year = numeric(), OOBsubclg_sc = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -825,7 +818,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datasubclg_sc <- rbind(oob_datasubclg_sc, data.frame(year = year, OOBsubclg_sc = current_oob))
 }
 
@@ -841,10 +834,10 @@ print(oob_datasubclg_sc)
 ```{r}
 set.seed(123)
 
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -853,7 +846,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -876,7 +869,7 @@ print(modelhinc5_sc)
 # Create an empty dataframe to store the results
 oob_datahinc5_sc <- data.frame(year = numeric(), OOBhinc5_sc = numeric())
 
-# Loop through the years from 2008 to 2021
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -888,7 +881,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datahinc5_sc <- rbind(oob_datahinc5_sc, data.frame(year = year, OOBhinc5_sc = current_oob))
 }
 ```
@@ -897,10 +890,10 @@ for (year in 2008:2021) {
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -910,7 +903,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -944,7 +937,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_datafullclass_sc <- rbind(oob_datafullclass_sc, data.frame(year = year, OOBfullclass_sc = current_oob))
 }
 
@@ -956,10 +949,10 @@ for (year in 2008:2021) {
 
 ```{r}
 set.seed(123)
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016
   if (year == 2016) {
@@ -969,7 +962,7 @@ for (year in 2008:2021) {
   # Filter the dataset for the current year
   current_data <- data[data$year == year, ]
   
-  # Remove columns with no data
+  # Removing columns with no data
   current_data <- current_data[, colSums(!is.na(current_data)) > 0]
   
   # Store the filtered dataset in the list
@@ -1003,7 +996,7 @@ for (year in 2008:2021) {
   # Extract the OOB error for the current model
   current_oob <- current_model$err.rate[nrow(current_model$err.rate), "OOB"]
   
-  # Append the year and OOB error to the dataframe
+  # Storing the year and OOB error to the dataframe
   oob_dataclasslifestyle_sc <- rbind(oob_dataclasslifestyle_sc, data.frame(year = year, OOBclasslifestyle_sc = current_oob))
 }
 
@@ -1013,24 +1006,27 @@ for (year in 2008:2021) {
 
 
 ## Merging
+Here I merge all the dataframes with the OOB-errors together. That way i can produce a table with them all together, and plots. 
 
 ```{r}
+# Lifestyle model merged with euroesec
 merged_generations_life_sc <- merge(oob_datalife_sc, oob_dataeuroesec_sc)
 
-# Subjective clas shome
+# Adding Subjective class home
 merged_generations_life_sc <- merge(merged_generations_life_sc, oob_datasubclh_sc)
 
 
-#Subjective class today
+# Adding Subjective class today
 merged_generations_life_sc <- merge(merged_generations_life_sc, oob_datasubclg_sc)
 
 
-# Income class
+# Adding  Income class
 merged_generations_life_sc <- merge(merged_generations_life_sc, oob_datahinc5_sc)
 
-
+# Adding full class model
 merged_generations_life_sc <- merge(merged_generations_life_sc, oob_datafullclass_sc)
 
+# Adding class and lifestyle model
 merged_generations_life_sc <- merge(merged_generations_life_sc, oob_dataclasslifestyle_sc)
 
 ```
@@ -1040,6 +1036,7 @@ merged_generations_life_sc
 ```
 
 ```{r}
+# This Latex output is used to produce table in overleaf. 
 datasummary_df(merged_generations_life_sc,
                output = "latex")
 ```
@@ -1047,8 +1044,9 @@ datasummary_df(merged_generations_life_sc,
 
 ### Plotting
 
+Plotting the OOB-error rate trend over time, with "Socialist" as outcome variable. 
 ```{r}
-# Using full sample sizes
+
 randomforestplot_sc <- ggplot(merged_generations_life_sc, aes(x = year)) +
   geom_line(aes(y = OOBlife_sc, color = "Lifestyle model"), linewidth = 1.3) +
   geom_line(aes(y = OOBfullclass_sc, color = "Full class model"), linewidth = 1.3) +
