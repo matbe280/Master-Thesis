@@ -9,7 +9,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-All generations 
+This file contains the script for a robustness check of multinomial logit on party preference over time. 
 
 
 # Setup
@@ -46,26 +46,10 @@ data <- mutate_at(imputed_data_0121,
 ```
 I will now check the amount of levels available for the different years in CB10 (favorite party).
 
+
 ```{r}
-possible_parties_2005 <- data %>%
-  filter(year == 2005) %>%
-  pull(cb10) %>%
-  levels()
-print(possible_parties_2005)
 
-
-possible_parties_2007 <- data %>%
-  filter(year == 2007) %>%
-  pull(cb10) %>%
-  levels()
-print(possible_parties_2007)
-
-```
-```{r}
-# Assuming 'data' is your dataframe containing the variable 'cb10'
-
-# Filter the data to exclude levels 11 and 12 from the variable 'cb10'
-# I do this since they represent parties that i do not want to include in the analysis. 
+# Excluding parties that are not in the national parliament
 data <- data %>% 
   filter(cb10 != "11" & cb10 != "12")
 
@@ -77,10 +61,10 @@ data$cb10 <- droplevels(data$cb10)
 ###  Lifestyle 
 
 ```{r}
-# Create an empty list to store the filtered datasets
+# Creating an empty list to store the filtered datasets (filtered by year).
 filtered_datasets <- list()
 
-# Loop through the years from 2008 to 2016
+# Looping through the years from 2008 to 2021
 for (year in 2008:2021) {
   # Skip year 2016 since all lifestyle variables are not available
   if (year == 2016) {
@@ -97,7 +81,7 @@ for (year in 2008:2021) {
   filtered_datasets[[as.character(year)]] <- current_data
   
 
-#Training the model for the current year
+# Training the model for the current year
 model_life <- multinom(cb10 ~ mc10c + mb99b + ma50c + ma40h + lb10a + ma10a + la10 + jc10a + eg10 + bc10 + bc20 + lb10e + lb10b + le10c, data = current_data)
   
 # Save the model with the corresponding name
@@ -121,7 +105,7 @@ for (year in 2008:2021) {
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
-  # Extract the model for the current year
+  # Extracting the model for the current year
   current_model <- get(paste("model_life", year, sep = ""))
   
   # Compute log-likelihood for the current model
@@ -130,7 +114,7 @@ for (year in 2008:2021) {
   # Compute AIC for the current model
   AIC_value <- AIC(current_model)
   
-  # Append the year, log-likelihood, and AIC to the dataframe
+  # Storing the year, log-likelihood, and AIC to the dataframe
   eval_datalife <- rbind(eval_datalife, data.frame(year = year, logLikelihood = logLikelihood, AIC = AIC_value))
 }
 
@@ -185,7 +169,7 @@ for (year in 2008:2021) {
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
-  # Extract the model for the current year
+  # Extracting the model for the current year
   current_model <- get(paste("model_euroesec", year, sep = ""))
   
   # Compute log-likelihood for the current model
@@ -194,7 +178,7 @@ for (year in 2008:2021) {
   # Compute AIC for the current model
   AIC_value <- AIC(current_model)
   
-  # Append the year, log-likelihood, and AIC to the dataframe
+  # Storing the year, log-likelihood, and AIC to the dataframe
   eval_dataeuroesec <- rbind(eval_dataeuroesec, data.frame(year = year, logLikelihood_euroesec = logLikelihood_euroesec, AIC_euroesec = AIC_value))
 }
 
@@ -248,7 +232,7 @@ for (year in 2008:2021) {
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
-  # Extract the model for the current year
+  # Extracting the model for the current year
   current_model <- get(paste("modelsubclg", year, sep = ""))
   
   # Compute log-likelihood for the current model
@@ -257,7 +241,7 @@ for (year in 2008:2021) {
   # Compute AIC for the current model
   AIC_value <- AIC(current_model)
   
-  # Append the year, log-likelihood, and AIC to the dataframe
+  # Storing the year, log-likelihood, and AIC to the dataframe
   eval_datasubclg <- rbind(eval_datasubclg, data.frame(year = year, logLikelihood_subclg = logLikelihood_subclg, AIC_subclg = AIC_value))
 }
 
@@ -307,7 +291,7 @@ for (year in 2008:2021) {
   if (year == 2016) {
     next  # Skip the current iteration and move to the next year
   }
-  # Extract the model for the current year
+  # Extracting the model for the current year
   current_model <- get(paste("modelfullclass", year, sep = ""))
   
   # Compute log-likelihood for the current model
@@ -316,7 +300,7 @@ for (year in 2008:2021) {
   # Compute AIC for the current model
   AIC_value <- AIC(current_model)
   
-  # Append the year, log-likelihood, and AIC to the dataframe
+  # Storing the year, log-likelihood, and AIC to the dataframe
   eval_datafullclass <- rbind(eval_datafullclass, data.frame(year = year, logLikelihood_fullclass = logLikelihood_fullclass, AIC_fullclass = AIC_value))
 }
 
@@ -366,7 +350,7 @@ for (year in 2008:2021) {
   # Compute accuracy
   accuracy_fullclass <- sum(predictions == test_data$cb10) / length(predictions)
   
-  # Append the year, log-likelihood, AIC, and accuracy to the dataframe
+  # Storing the year, log-likelihood, AIC, and accuracy to the dataframe
   eval_datafullclass <- rbind(eval_datafullclass, data.frame(year = year, logLikelihood_fullclass = logLikelihood_fullclass, AIC_fullclass = AIC_value, accuracy_fullclass = accuracy_fullclass))
 }
 
@@ -416,7 +400,7 @@ for (year in 2008:2021) {
   # Compute accuracy
   accuracy_lifestyle <- sum(predictions_lifestyle == test_data$cb10) / length(predictions_lifestyle)
   
-  # Append the year, log-likelihood, AIC, and accuracy to the dataframe
+  # Storing the year, log-likelihood, AIC, and accuracy to the dataframe
   eval_datalifestyle <- rbind(eval_datalifestyle, data.frame(year = year, logLikelihood_lifestyle = logLikelihood_lifestyle, AIC_lifestyle = AIC_value, accuracy_lifestyle = accuracy_lifestyle))
 }
 
@@ -427,6 +411,8 @@ print(eval_datalifestyle)
 
 
 ### Merging
+
+Merging the results from each model
 ```{r}
 
 merged_aic_log <- merge(eval_datasubclg, eval_dataeuroesec)
@@ -434,13 +420,15 @@ merged_aic_log <- merge(eval_datasubclg, eval_dataeuroesec)
 merged_aic_log <- merge(merged, eval_datalife)
 
 ```
-
+Merging accuracy results from each model
 ```{r}
 merged_accuracy <- merge(eval_datafullclass, eval_datalifestyle)
 
 table_accuracy <- merged_accuracy %>% 
   select(-logLikelihood_fullclass, -logLikelihood_lifestyle)
 ```
+
+Table for overleaf. 
 ```{r}
 datasummary_df(table_accuracy,
                output = "latex")
@@ -448,7 +436,7 @@ datasummary_df(table_accuracy,
 
 
 ```{r}
-# Using same sample size
+# Creating plot for appendices 
 multi_FL <- ggplot(merged_accuracy, aes(x = year)) +
   geom_line(aes(y = accuracy_fullclass, color = "Full class model"), linewidth = 1.1) +
   geom_line(aes(y = accuracy_lifestyle, color = "Lifestyle model"), linewidth = 1.1)+
@@ -459,6 +447,7 @@ multi_FL <- ggplot(merged_accuracy, aes(x = year)) +
 ```
 
 ```{r}
+# Saving plot
 ggsave("multinomial.pdf", multi_FL, width = 8, height = 6, units = "in", dpi = 300)
 
 ```
