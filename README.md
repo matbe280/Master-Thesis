@@ -3,6 +3,8 @@ Code for Master thesis
 
 This repository contains code for Mattias Bengtssons's Master Thesis, Spring 2024. 
 
+The programming language used is R, version [64-bit] C:\R\R-4.1.3. 
+
 In the "Imputation_2024_04_05_incomeandculturewar" you find the code used for Imputation. The outputted CSV from that file, is the data used in all other scripts.
 
 "RandomForest_Predictions" contains the script used for both Random Forest models, plots, and latex output for tables. 
