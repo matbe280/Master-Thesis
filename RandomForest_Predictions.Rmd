@@ -1,5 +1,5 @@
 ---
-title: "True RF"
+title: "Random Forest Models"
 author: "Mattias Bengtsson"
 date: "2024-04-12"
 output: pdf_document
@@ -42,23 +42,7 @@ data <- mutate_at(imputed_data_0121,
                            vars(-year, -age, -idnr), 
                            as.factor)
 ```
-I will now check the amount of levels available for the different years in CB10 (favorite party).
 
-```{r}
-possible_parties_2005 <- data %>%
-  filter(year == 2005) %>%
-  pull(cb10) %>%
-  levels()
-print(possible_parties_2005)
-
-
-possible_parties_2007 <- data %>%
-  filter(year == 2007) %>%
-  pull(cb10) %>%
-  levels()
-print(possible_parties_2007)
-
-```
 ```{r}
 
 # Filter the data to exclude parties that is not in the national parliament
@@ -71,6 +55,7 @@ data$cb10 <- droplevels(data$cb10)
 
 
 ```{r}
+#Constructing the Socialist or Not variable, 1 = socialist party, 0 = Not socialist. 
 data <- data %>% 
   mutate(socialist = case_when(
     cb10 == "1" ~ "1",  
