@@ -1,8 +1,8 @@
 # Master-Thesis
 
 **Lifestyle Politics in Sweden** –
-Examining the Emergence of Lifestyle politics Amidst the
-Decline of Class Voting in Sweden
+_Examining the Emergence of Lifestyle politics Amidst the
+Decline of Class Voting in Sweden_
 
 This repository contains code for Mattias Bengtssons's Master Thesis, Spring 2024. 
 
