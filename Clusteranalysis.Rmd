@@ -52,17 +52,17 @@ library(tinytable)
 
 
 ```{r}
-#setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis")#liu dator
+setwd("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis")#liu dator
 ```
 ```{r}
-setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis") 
+#setwd("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis") 
 ```
 
 
 ```{r}
-#imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
+imputed_data_0121 <- read.csv("C:/Users/matbe280/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
 
-imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
+#imputed_data_0121 <- read.csv("C:/Users/admin/OneDrive - Linköpings universitet/Datawrangling SOM/Predictions/Clusteranalysis/combined_imputed_data0121_incomeandcult.csv")
 
 
 
@@ -194,6 +194,7 @@ plot(cluster_result_2019, main = "Hierarchical Clustering Dendrogram 2019",
      xlab = "Observations", sub = NULL)
 dev.off()
 ```
+
 
 
 # Clustering  2014
@@ -1300,5 +1301,36 @@ datasummary(
 
 
 
+# Silhouette
 
+
+
+```{r}
+# Calculating silhouette scores
+silhouette_score_2019 <- silhouette(clusters_2019_k8[,1], dist_matrix_2019)
+
+silhouette_score_2019_table <- mean(silhouette_score_2019[,3])
+
+silhouette_score_2014 <- silhouette(clusters_2014_k8[,1], dist_matrix_2014)
+
+silhouette_score_2014_table <- mean(silhouette_score_2014[,3])
+
+silhouette_score_2008 <- silhouette(clusters_2008_k8[,1], dist_matrix_2008)
+
+silhouette_score_2008_table <- mean(silhouette_score_2008[,3])
+```
+
+```{r}
+# Storing silhouette score in dataframe
+silhouette_scores_df <- data.frame(
+  Year = c(2008, 2014, 2019),
+  Silhouette_Score = c(silhouette_score_2008_table, silhouette_score_2014_table, silhouette_score_2019_table)
+)
+```
+
+```{r}
+# Creating table for latex
+datasummary_df(silhouette_scores_df,
+               output = "latex")
+```
 
